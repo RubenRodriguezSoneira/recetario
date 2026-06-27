@@ -7,6 +7,7 @@ import (
 
 type Recipe struct {
 	ID           string        `json:"id" db:"id"`
+	UserID       string        `json:"user_id" db:"user_id"`
 	Title        string        `json:"title" db:"title"`
 	Description  string        `json:"description" db:"description"`
 	PrepTime     int           `json:"prep_time" db:"prep_time"` // minutes

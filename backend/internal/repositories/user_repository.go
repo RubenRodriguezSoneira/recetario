@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/google/uuid"
+
 	"recipe-app/internal/models"
 )
 
@@ -18,26 +20,32 @@ func NewUserRepository(db *sql.DB) *UserRepository {
 
 // CreateUser creates a new user in the database
 func (r *UserRepository) CreateUser(user *models.User) error {
-	query := `
-		INSERT INTO users (email, username, first_name, last_name, password_hash, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7)
-		RETURNING id`
+	if user.ID == "" {
+		user.ID = uuid.New().String()
+	}
+	now := time.Now()
 
-	err := r.db.QueryRow(
+	query := `
+		INSERT INTO users (id, email, username, first_name, last_name, password_hash, created_at, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+
+	_, err := r.db.Exec(
 		query,
+		user.ID,
 		user.Email,
 		user.Username,
 		user.FirstName,
 		user.LastName,
 		user.Password,
-		time.Now(),
-		time.Now(),
-	).Scan(&user.ID)
-
+		now,
+		now,
+	)
 	if err != nil {
 		return fmt.Errorf("failed to create user: %w", err)
 	}
 
+	user.CreatedAt = now
+	user.UpdatedAt = now
 	return nil
 }
 
@@ -46,7 +54,7 @@ func (r *UserRepository) GetUserByID(id string) (*models.User, error) {
 	query := `
 		SELECT id, email, username, first_name, last_name, password_hash, avatar_url, created_at, updated_at
 		FROM users
-		WHERE id = $1`
+		WHERE id = ?`
 
 	user := &models.User{}
 	err := r.db.QueryRow(query, id).Scan(
@@ -76,7 +84,7 @@ func (r *UserRepository) GetUserByEmail(email string) (*models.User, error) {
 	query := `
 		SELECT id, email, username, first_name, last_name, password_hash, avatar_url, created_at, updated_at
 		FROM users
-		WHERE email = $1`
+		WHERE email = ?`
 
 	user := &models.User{}
 	err := r.db.QueryRow(query, email).Scan(
@@ -106,7 +114,7 @@ func (r *UserRepository) GetUserByUsername(username string) (*models.User, error
 	query := `
 		SELECT id, email, username, first_name, last_name, password_hash, avatar_url, created_at, updated_at
 		FROM users
-		WHERE username = $1`
+		WHERE username = ?`
 
 	user := &models.User{}
 	err := r.db.QueryRow(query, username).Scan(
@@ -135,18 +143,18 @@ func (r *UserRepository) GetUserByUsername(username string) (*models.User, error
 func (r *UserRepository) UpdateUser(user *models.User) error {
 	query := `
 		UPDATE users 
-		SET email = $2, username = $3, first_name = $4, last_name = $5, avatar_url = $6, updated_at = $7
-		WHERE id = $1`
+		SET email = ?, username = ?, first_name = ?, last_name = ?, avatar_url = ?, updated_at = ?
+		WHERE id = ?`
 
 	_, err := r.db.Exec(
 		query,
-		user.ID,
 		user.Email,
 		user.Username,
 		user.FirstName,
 		user.LastName,
 		user.AvatarURL,
 		time.Now(),
+		user.ID,
 	)
 
 	if err != nil {
@@ -160,10 +168,10 @@ func (r *UserRepository) UpdateUser(user *models.User) error {
 func (r *UserRepository) UpdatePassword(userID, password string) error {
 	query := `
 		UPDATE users 
-		SET password = $2, updated_at = $3
-		WHERE id = $1`
+		SET password_hash = ?, updated_at = ?
+		WHERE id = ?`
 
-	_, err := r.db.Exec(query, userID, password, time.Now())
+	_, err := r.db.Exec(query, password, time.Now(), userID)
 	if err != nil {
 		return fmt.Errorf("failed to update password: %w", err)
 	}
@@ -173,7 +181,7 @@ func (r *UserRepository) UpdatePassword(userID, password string) error {
 
 // DeleteUser deletes a user and all their data
 func (r *UserRepository) DeleteUser(id string) error {
-	query := "DELETE FROM users WHERE id = $1"
+	query := "DELETE FROM users WHERE id = ?"
 	_, err := r.db.Exec(query, id)
 	if err != nil {
 		return fmt.Errorf("failed to delete user: %w", err)
@@ -184,7 +192,7 @@ func (r *UserRepository) DeleteUser(id string) error {
 
 // EmailExists checks if an email already exists
 func (r *UserRepository) EmailExists(email string) (bool, error) {
-	query := "SELECT EXISTS(SELECT 1 FROM users WHERE email = $1)"
+	query := "SELECT EXISTS(SELECT 1 FROM users WHERE email = ?)"
 
 	var exists bool
 	err := r.db.QueryRow(query, email).Scan(&exists)
@@ -197,7 +205,7 @@ func (r *UserRepository) EmailExists(email string) (bool, error) {
 
 // UsernameExists checks if a username already exists
 func (r *UserRepository) UsernameExists(username string) (bool, error) {
-	query := "SELECT EXISTS(SELECT 1 FROM users WHERE username = $1)"
+	query := "SELECT EXISTS(SELECT 1 FROM users WHERE username = ?)"
 
 	var exists bool
 	err := r.db.QueryRow(query, username).Scan(&exists)

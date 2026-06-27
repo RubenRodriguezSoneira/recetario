@@ -5,8 +5,18 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/google/uuid"
+
 	"recipe-app/internal/models"
 )
+
+// sqlExecutor is satisfied by both *sql.DB and *sql.Tx, letting the insert
+// helpers run either standalone or inside a transaction.
+type sqlExecutor interface {
+	Exec(query string, args ...interface{}) (sql.Result, error)
+	Query(query string, args ...interface{}) (*sql.Rows, error)
+	QueryRow(query string, args ...interface{}) *sql.Row
+}
 
 type RecipeRepository struct {
 	db *sql.DB
@@ -16,15 +26,26 @@ func NewRecipeRepository(db *sql.DB) *RecipeRepository {
 	return &RecipeRepository{db: db}
 }
 
-// CreateRecipe creates a new recipe in the database
+// CreateRecipe creates a recipe and its child rows atomically.
 func (r *RecipeRepository) CreateRecipe(recipe *models.Recipe) error {
-	query := `
-		INSERT INTO recipes (title, description, prep_time, cook_time, servings, difficulty, category, cuisine, image_url, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
-		RETURNING id`
+	if recipe.ID == "" {
+		recipe.ID = uuid.New().String()
+	}
+	now := time.Now()
 
-	err := r.db.QueryRow(
+	tx, err := r.db.Begin()
+	if err != nil {
+		return fmt.Errorf("failed to begin transaction: %w", err)
+	}
+	defer tx.Rollback()
+
+	query := `
+		INSERT INTO recipes (id, user_id, title, description, prep_time, cook_time, servings, difficulty, category, cuisine, image_url, created_at, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+	if _, err := tx.Exec(
 		query,
+		recipe.ID,
+		recipe.UserID,
 		recipe.Title,
 		recipe.Description,
 		recipe.PrepTime,
@@ -34,58 +55,54 @@ func (r *RecipeRepository) CreateRecipe(recipe *models.Recipe) error {
 		recipe.Category,
 		recipe.Cuisine,
 		recipe.ImageURL,
-		time.Now(),
-		time.Now(),
-	).Scan(&recipe.ID)
-
-	if err != nil {
+		now,
+		now,
+	); err != nil {
 		return fmt.Errorf("failed to create recipe: %w", err)
 	}
 
-	// Create ingredients
-	if len(recipe.Ingredients) > 0 {
-		for i, ingredient := range recipe.Ingredients {
-			ingredient.RecipeID = recipe.ID
-			ingredient.Position = i + 1
-			if err := r.CreateIngredient(&ingredient); err != nil {
-				return fmt.Errorf("failed to create ingredient: %w", err)
-			}
+	for i := range recipe.Ingredients {
+		recipe.Ingredients[i].RecipeID = recipe.ID
+		recipe.Ingredients[i].Position = i + 1
+		if err := r.insertIngredient(tx, &recipe.Ingredients[i]); err != nil {
+			return err
 		}
 	}
 
-	// Create instructions
-	if len(recipe.Instructions) > 0 {
-		for i, instruction := range recipe.Instructions {
-			instruction.RecipeID = recipe.ID
-			instruction.Position = i + 1
-			if err := r.CreateInstruction(&instruction); err != nil {
-				return fmt.Errorf("failed to create instruction: %w", err)
-			}
+	for i := range recipe.Instructions {
+		recipe.Instructions[i].RecipeID = recipe.ID
+		recipe.Instructions[i].Position = i + 1
+		if err := r.insertInstruction(tx, &recipe.Instructions[i]); err != nil {
+			return err
 		}
 	}
 
-	// Create tags
-	if len(recipe.Tags) > 0 {
-		for _, tag := range recipe.Tags {
-			if err := r.CreateRecipeTag(recipe.ID, tag); err != nil {
-				return fmt.Errorf("failed to create recipe tag: %w", err)
-			}
+	for _, tag := range recipe.Tags {
+		if err := r.insertRecipeTag(tx, recipe.ID, tag); err != nil {
+			return err
 		}
 	}
 
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("failed to commit transaction: %w", err)
+	}
+
+	recipe.CreatedAt = now
+	recipe.UpdatedAt = now
 	return nil
 }
 
-// GetRecipe retrieves a recipe by ID with ingredients, instructions, and tags
+// GetRecipe retrieves a recipe by ID with ingredients, instructions, and tags.
 func (r *RecipeRepository) GetRecipe(id string) (*models.Recipe, error) {
 	query := `
-		SELECT id, title, description, prep_time, cook_time, servings, difficulty, category, cuisine, image_url, created_at, updated_at
+		SELECT id, user_id, title, description, prep_time, cook_time, servings, difficulty, category, cuisine, image_url, created_at, updated_at
 		FROM recipes
-		WHERE id = $1`
+		WHERE id = ?`
 
 	recipe := &models.Recipe{}
 	err := r.db.QueryRow(query, id).Scan(
 		&recipe.ID,
+		&recipe.UserID,
 		&recipe.Title,
 		&recipe.Description,
 		&recipe.PrepTime,
@@ -98,7 +115,6 @@ func (r *RecipeRepository) GetRecipe(id string) (*models.Recipe, error) {
 		&recipe.CreatedAt,
 		&recipe.UpdatedAt,
 	)
-
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return nil, fmt.Errorf("recipe not found")
@@ -106,21 +122,18 @@ func (r *RecipeRepository) GetRecipe(id string) (*models.Recipe, error) {
 		return nil, fmt.Errorf("failed to get recipe: %w", err)
 	}
 
-	// Get ingredients
 	ingredients, err := r.GetRecipeIngredients(id)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get recipe ingredients: %w", err)
 	}
 	recipe.Ingredients = ingredients
 
-	// Get instructions
 	instructions, err := r.GetRecipeInstructions(id)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get recipe instructions: %w", err)
 	}
 	recipe.Instructions = instructions
 
-	// Get tags
 	tags, err := r.GetRecipeTags(id)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get recipe tags: %w", err)
@@ -130,111 +143,42 @@ func (r *RecipeRepository) GetRecipe(id string) (*models.Recipe, error) {
 	return recipe, nil
 }
 
-// GetRecipes retrieves all recipes with optional filtering
+// GetRecipes retrieves recipes with optional search and filters.
 func (r *RecipeRepository) GetRecipes(limit, offset int, search string, difficulty string, maxCookTime int) ([]*models.Recipe, error) {
-	// Handle nil repository for testing
-	if r.db == nil {
-		// Return mock data for testing
-		return []*models.Recipe{
-			{
-				ID:          "1",
-				Title:       "Spaghetti Bolognese",
-				Description: "Classic Italian pasta dish with rich meat sauce",
-				CookTime:    30,
-				Difficulty:  "medium",
-				Category:    "Pasta",
-				Cuisine:     "Italian",
-				ImageURL:    "/images/spaghetti-bolognese.jpg",
-			},
-			{
-				ID:          "2",
-				Title:       "Chicken Curry",
-				Description: "Spicy and aromatic Indian curry with tender chicken",
-				CookTime:    45,
-				Difficulty:  "hard",
-				Category:    "Curry",
-				Cuisine:     "Indian",
-				ImageURL:    "/images/chicken-curry.jpg",
-			},
-			{
-				ID:          "3",
-				Title:       "Caesar Salad",
-				Description: "Fresh romaine lettuce with creamy Caesar dressing",
-				CookTime:    15,
-				Difficulty:  "easy",
-				Category:    "Salad",
-				Cuisine:     "American",
-				ImageURL:    "/images/caesar-salad.jpg",
-			},
-			{
-				ID:          "4",
-				Title:       "Beef Tacos",
-				Description: "Mexican-style tacos with seasoned ground beef",
-				CookTime:    25,
-				Difficulty:  "medium",
-				Category:    "Mexican",
-				Cuisine:     "Mexican",
-				ImageURL:    "/images/beef-tacos.jpg",
-			},
-			{
-				ID:          "5",
-				Title:       "Chocolate Cake",
-				Description: "Rich and moist chocolate cake with fudge frosting",
-				CookTime:    60,
-				Difficulty:  "hard",
-				Category:    "Dessert",
-				Cuisine:     "American",
-				ImageURL:    "/images/chocolate-cake.jpg",
-			},
-			{
-				ID:          "6",
-				Title:       "Greek Salad",
-				Description: "Mediterranean salad with feta cheese and olives",
-				CookTime:    10,
-				Difficulty:  "easy",
-				Category:    "Salad",
-				Cuisine:     "Greek",
-				ImageURL:    "/images/greek-salad.jpg",
-			},
-		}, nil
-	}
-
 	query := `
-		SELECT id, title, description, prep_time, cook_time, servings, difficulty, category, cuisine, image_url, created_at, updated_at
+		SELECT id, user_id, title, description, prep_time, cook_time, servings, difficulty, category, cuisine, image_url, created_at, updated_at
 		FROM recipes
 		WHERE 1=1`
 
 	args := []interface{}{}
-	argIndex := 1
 
 	if search != "" {
-		query += fmt.Sprintf(" AND (title ILIKE $%d OR description ILIKE $%d)", argIndex, argIndex+1)
+		query += " AND (title LIKE ? OR description LIKE ?)"
 		args = append(args, "%"+search+"%", "%"+search+"%")
-		argIndex += 2
 	}
 
 	if difficulty != "" {
-		query += fmt.Sprintf(" AND difficulty = $%d", argIndex)
+		query += " AND difficulty = ?"
 		args = append(args, difficulty)
-		argIndex++
 	}
 
 	if maxCookTime > 0 {
-		query += fmt.Sprintf(" AND cook_time <= $%d", argIndex)
+		query += " AND cook_time <= ?"
 		args = append(args, maxCookTime)
-		argIndex++
 	}
 
 	query += " ORDER BY created_at DESC"
 
 	if limit > 0 {
-		query += fmt.Sprintf(" LIMIT $%d", argIndex)
+		query += " LIMIT ?"
 		args = append(args, limit)
-		argIndex++
+	} else if offset > 0 {
+		// SQLite requires a LIMIT before OFFSET; -1 means "no limit".
+		query += " LIMIT -1"
 	}
 
 	if offset > 0 {
-		query += fmt.Sprintf(" OFFSET $%d", argIndex)
+		query += " OFFSET ?"
 		args = append(args, offset)
 	}
 
@@ -249,6 +193,7 @@ func (r *RecipeRepository) GetRecipes(limit, offset int, search string, difficul
 		recipe := &models.Recipe{}
 		err := rows.Scan(
 			&recipe.ID,
+			&recipe.UserID,
 			&recipe.Title,
 			&recipe.Description,
 			&recipe.PrepTime,
@@ -266,21 +211,30 @@ func (r *RecipeRepository) GetRecipes(limit, offset int, search string, difficul
 		}
 		recipes = append(recipes, recipe)
 	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("failed to iterate recipes: %w", err)
+	}
 
 	return recipes, nil
 }
 
-// UpdateRecipe updates an existing recipe
+// UpdateRecipe updates a recipe and rewrites its child rows atomically.
 func (r *RecipeRepository) UpdateRecipe(recipe *models.Recipe) error {
-	query := `
-		UPDATE recipes 
-		SET title = $2, description = $3, prep_time = $4, cook_time = $5, servings = $6, 
-		    difficulty = $7, category = $8, cuisine = $9, image_url = $10, updated_at = $11
-		WHERE id = $1`
+	now := time.Now()
 
-	_, err := r.db.Exec(
+	tx, err := r.db.Begin()
+	if err != nil {
+		return fmt.Errorf("failed to begin transaction: %w", err)
+	}
+	defer tx.Rollback()
+
+	query := `
+		UPDATE recipes
+		SET title = ?, description = ?, prep_time = ?, cook_time = ?, servings = ?,
+		    difficulty = ?, category = ?, cuisine = ?, image_url = ?, updated_at = ?
+		WHERE id = ?`
+	if _, err := tx.Exec(
 		query,
-		recipe.ID,
 		recipe.Title,
 		recipe.Description,
 		recipe.PrepTime,
@@ -290,102 +244,111 @@ func (r *RecipeRepository) UpdateRecipe(recipe *models.Recipe) error {
 		recipe.Category,
 		recipe.Cuisine,
 		recipe.ImageURL,
-		time.Now(),
-	)
-
-	if err != nil {
+		now,
+		recipe.ID,
+	); err != nil {
 		return fmt.Errorf("failed to update recipe: %w", err)
 	}
 
-	// Update ingredients (delete existing and recreate new ones)
-	if err := r.DeleteRecipeIngredients(recipe.ID); err != nil {
+	if _, err := tx.Exec("DELETE FROM ingredients WHERE recipe_id = ?", recipe.ID); err != nil {
 		return fmt.Errorf("failed to delete existing ingredients: %w", err)
 	}
-
-	for i, ingredient := range recipe.Ingredients {
-		ingredient.RecipeID = recipe.ID
-		ingredient.Position = i + 1
-		if err := r.CreateIngredient(&ingredient); err != nil {
-			return fmt.Errorf("failed to create ingredient: %w", err)
+	for i := range recipe.Ingredients {
+		recipe.Ingredients[i].RecipeID = recipe.ID
+		recipe.Ingredients[i].Position = i + 1
+		if err := r.insertIngredient(tx, &recipe.Ingredients[i]); err != nil {
+			return err
 		}
 	}
 
-	// Update instructions (delete existing and recreate new ones)
-	if err := r.DeleteRecipeInstructions(recipe.ID); err != nil {
+	if _, err := tx.Exec("DELETE FROM instructions WHERE recipe_id = ?", recipe.ID); err != nil {
 		return fmt.Errorf("failed to delete existing instructions: %w", err)
 	}
-
-	for i, instruction := range recipe.Instructions {
-		instruction.RecipeID = recipe.ID
-		instruction.Position = i + 1
-		if err := r.CreateInstruction(&instruction); err != nil {
-			return fmt.Errorf("failed to create instruction: %w", err)
+	for i := range recipe.Instructions {
+		recipe.Instructions[i].RecipeID = recipe.ID
+		recipe.Instructions[i].Position = i + 1
+		if err := r.insertInstruction(tx, &recipe.Instructions[i]); err != nil {
+			return err
 		}
 	}
 
-	// Update tags (delete existing and recreate new ones)
-	if err := r.DeleteRecipeTags(recipe.ID); err != nil {
+	if _, err := tx.Exec("DELETE FROM recipe_tags WHERE recipe_id = ?", recipe.ID); err != nil {
 		return fmt.Errorf("failed to delete existing tags: %w", err)
 	}
-
 	for _, tag := range recipe.Tags {
-		if err := r.CreateRecipeTag(recipe.ID, tag); err != nil {
-			return fmt.Errorf("failed to create recipe tag: %w", err)
+		if err := r.insertRecipeTag(tx, recipe.ID, tag); err != nil {
+			return err
 		}
 	}
 
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("failed to commit transaction: %w", err)
+	}
+
+	recipe.UpdatedAt = now
 	return nil
 }
 
-// DeleteRecipe deletes a recipe and its ingredients, instructions, and tags
+// DeleteRecipe removes a recipe and its child rows atomically.
 func (r *RecipeRepository) DeleteRecipe(id string) error {
-	// Delete dependent records first
-	if err := r.DeleteRecipeIngredients(id); err != nil {
-		return fmt.Errorf("failed to delete recipe ingredients: %w", err)
-	}
-
-	if err := r.DeleteRecipeInstructions(id); err != nil {
-		return fmt.Errorf("failed to delete recipe instructions: %w", err)
-	}
-
-	if err := r.DeleteRecipeTags(id); err != nil {
-		return fmt.Errorf("failed to delete recipe tags: %w", err)
-	}
-
-	// Delete recipe
-	query := "DELETE FROM recipes WHERE id = $1"
-	_, err := r.db.Exec(query, id)
+	tx, err := r.db.Begin()
 	if err != nil {
-		return fmt.Errorf("failed to delete recipe: %w", err)
+		return fmt.Errorf("failed to begin transaction: %w", err)
+	}
+	defer tx.Rollback()
+
+	statements := []string{
+		"DELETE FROM ingredients WHERE recipe_id = ?",
+		"DELETE FROM instructions WHERE recipe_id = ?",
+		"DELETE FROM recipe_tags WHERE recipe_id = ?",
+		"DELETE FROM recipes WHERE id = ?",
+	}
+	for _, stmt := range statements {
+		if _, err := tx.Exec(stmt, id); err != nil {
+			return fmt.Errorf("failed to delete recipe: %w", err)
+		}
+	}
+
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("failed to commit transaction: %w", err)
 	}
 
 	return nil
 }
 
-// CreateIngredient creates a new ingredient
+// CreateIngredient inserts a single ingredient.
 func (r *RecipeRepository) CreateIngredient(ingredient *models.Ingredient) error {
-	query := `
-		INSERT INTO ingredients (recipe_id, name, amount, unit, notes, position)
-		VALUES ($1, $2, $3, $4, $5, $6)
-		RETURNING id`
+	return r.insertIngredient(r.db, ingredient)
+}
 
-	return r.db.QueryRow(
+func (r *RecipeRepository) insertIngredient(ex sqlExecutor, ingredient *models.Ingredient) error {
+	if ingredient.ID == "" {
+		ingredient.ID = uuid.New().String()
+	}
+	query := `
+		INSERT INTO ingredients (id, recipe_id, name, amount, unit, notes, position)
+		VALUES (?, ?, ?, ?, ?, ?, ?)`
+	if _, err := ex.Exec(
 		query,
+		ingredient.ID,
 		ingredient.RecipeID,
 		ingredient.Name,
 		ingredient.Amount,
 		ingredient.Unit,
 		ingredient.Notes,
 		ingredient.Position,
-	).Scan(&ingredient.ID)
+	); err != nil {
+		return fmt.Errorf("failed to create ingredient: %w", err)
+	}
+	return nil
 }
 
-// GetRecipeIngredients retrieves all ingredients for a recipe
+// GetRecipeIngredients retrieves all ingredients for a recipe.
 func (r *RecipeRepository) GetRecipeIngredients(recipeID string) ([]models.Ingredient, error) {
 	query := `
 		SELECT id, recipe_id, name, amount, unit, notes, position
 		FROM ingredients
-		WHERE recipe_id = $1
+		WHERE recipe_id = ?
 		ORDER BY position`
 
 	rows, err := r.db.Query(query, recipeID)
@@ -411,39 +374,54 @@ func (r *RecipeRepository) GetRecipeIngredients(recipeID string) ([]models.Ingre
 		}
 		ingredients = append(ingredients, ingredient)
 	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("failed to iterate ingredients: %w", err)
+	}
 
 	return ingredients, nil
 }
 
-// DeleteRecipeIngredients deletes all ingredients for a recipe
+// DeleteRecipeIngredients deletes all ingredients for a recipe.
 func (r *RecipeRepository) DeleteRecipeIngredients(recipeID string) error {
-	query := "DELETE FROM ingredients WHERE recipe_id = $1"
-	_, err := r.db.Exec(query, recipeID)
-	return err
+	_, err := r.db.Exec("DELETE FROM ingredients WHERE recipe_id = ?", recipeID)
+	if err != nil {
+		return fmt.Errorf("failed to delete recipe ingredients: %w", err)
+	}
+	return nil
 }
 
-// Instruction management methods
+// CreateInstruction inserts a single instruction.
 func (r *RecipeRepository) CreateInstruction(instruction *models.Instruction) error {
-	query := `
-		INSERT INTO instructions (recipe_id, text, position, duration, temperature)
-		VALUES ($1, $2, $3, $4, $5)
-		RETURNING id`
+	return r.insertInstruction(r.db, instruction)
+}
 
-	return r.db.QueryRow(
+func (r *RecipeRepository) insertInstruction(ex sqlExecutor, instruction *models.Instruction) error {
+	if instruction.ID == "" {
+		instruction.ID = uuid.New().String()
+	}
+	query := `
+		INSERT INTO instructions (id, recipe_id, text, position, duration, temperature)
+		VALUES (?, ?, ?, ?, ?, ?)`
+	if _, err := ex.Exec(
 		query,
+		instruction.ID,
 		instruction.RecipeID,
 		instruction.Text,
 		instruction.Position,
 		instruction.Duration,
 		instruction.Temperature,
-	).Scan(&instruction.ID)
+	); err != nil {
+		return fmt.Errorf("failed to create instruction: %w", err)
+	}
+	return nil
 }
 
+// GetRecipeInstructions retrieves all instructions for a recipe.
 func (r *RecipeRepository) GetRecipeInstructions(recipeID string) ([]models.Instruction, error) {
 	query := `
 		SELECT id, recipe_id, text, position, duration, temperature
 		FROM instructions
-		WHERE recipe_id = $1
+		WHERE recipe_id = ?
 		ORDER BY position`
 
 	rows, err := r.db.Query(query, recipeID)
@@ -468,25 +446,37 @@ func (r *RecipeRepository) GetRecipeInstructions(recipeID string) ([]models.Inst
 		}
 		instructions = append(instructions, instruction)
 	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("failed to iterate instructions: %w", err)
+	}
 
 	return instructions, nil
 }
 
+// DeleteRecipeInstructions deletes all instructions for a recipe.
 func (r *RecipeRepository) DeleteRecipeInstructions(recipeID string) error {
-	query := "DELETE FROM instructions WHERE recipe_id = $1"
-	_, err := r.db.Exec(query, recipeID)
-	return err
+	_, err := r.db.Exec("DELETE FROM instructions WHERE recipe_id = ?", recipeID)
+	if err != nil {
+		return fmt.Errorf("failed to delete recipe instructions: %w", err)
+	}
+	return nil
 }
 
-// Tag management methods
+// CreateRecipeTag inserts a single recipe tag.
 func (r *RecipeRepository) CreateRecipeTag(recipeID, tag string) error {
-	query := `INSERT INTO recipe_tags (recipe_id, tag) VALUES ($1, $2)`
-	_, err := r.db.Exec(query, recipeID, tag)
-	return err
+	return r.insertRecipeTag(r.db, recipeID, tag)
 }
 
+func (r *RecipeRepository) insertRecipeTag(ex sqlExecutor, recipeID, tag string) error {
+	if _, err := ex.Exec("INSERT INTO recipe_tags (recipe_id, tag) VALUES (?, ?)", recipeID, tag); err != nil {
+		return fmt.Errorf("failed to create recipe tag: %w", err)
+	}
+	return nil
+}
+
+// GetRecipeTags retrieves all tags for a recipe.
 func (r *RecipeRepository) GetRecipeTags(recipeID string) ([]string, error) {
-	query := `SELECT tag FROM recipe_tags WHERE recipe_id = $1 ORDER BY tag`
+	query := `SELECT tag FROM recipe_tags WHERE recipe_id = ? ORDER BY tag`
 
 	rows, err := r.db.Query(query, recipeID)
 	if err != nil {
@@ -502,12 +492,18 @@ func (r *RecipeRepository) GetRecipeTags(recipeID string) ([]string, error) {
 		}
 		tags = append(tags, tag)
 	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("failed to iterate tags: %w", err)
+	}
 
 	return tags, nil
 }
 
+// DeleteRecipeTags deletes all tags for a recipe.
 func (r *RecipeRepository) DeleteRecipeTags(recipeID string) error {
-	query := "DELETE FROM recipe_tags WHERE recipe_id = $1"
-	_, err := r.db.Exec(query, recipeID)
-	return err
+	_, err := r.db.Exec("DELETE FROM recipe_tags WHERE recipe_id = ?", recipeID)
+	if err != nil {
+		return fmt.Errorf("failed to delete recipe tags: %w", err)
+	}
+	return nil
 }

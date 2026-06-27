@@ -11,7 +11,7 @@ import (
 )
 
 type Claims struct {
-	UserID  int    `json:"user_id"`
+	UserID  string `json:"user_id"`
 	Email   string `json:"email"`
 	IsAdmin bool   `json:"is_admin"`
 	jwt.RegisteredClaims
@@ -31,7 +31,7 @@ func NewAuthService(secret string) *AuthService {
 	}
 }
 
-func (a *AuthService) GenerateToken(userID int, email string, isAdmin bool) (string, error) {
+func (a *AuthService) GenerateToken(userID string, email string, isAdmin bool) (string, error) {
 	claims := &Claims{
 		UserID:  userID,
 		Email:   email,
@@ -119,8 +119,8 @@ func (a *AuthService) OptionalAuthMiddleware(next http.Handler) http.Handler {
 	})
 }
 
-func GetUserID(ctx context.Context) (int, bool) {
-	userID, ok := ctx.Value(UserIDKey).(int)
+func GetUserID(ctx context.Context) (string, bool) {
+	userID, ok := ctx.Value(UserIDKey).(string)
 	return userID, ok
 }
 
