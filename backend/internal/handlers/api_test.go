@@ -11,7 +11,8 @@ import (
 )
 
 func TestAPIHandler_GetRecipes(t *testing.T) {
-	handler := NewAPIHandler()
+	// For testing, we'll pass nil repository to use mock-like behavior
+	handler := NewAPIHandler(nil)
 
 	tests := []struct {
 		name           string
@@ -75,7 +76,7 @@ func TestAPIHandler_GetRecipes(t *testing.T) {
 }
 
 func TestAPIHandler_CreateRecipe(t *testing.T) {
-	handler := NewAPIHandler()
+	handler := NewAPIHandler(nil)
 
 	req := httptest.NewRequest(http.MethodPost, "/api/recipes", nil)
 	w := httptest.NewRecorder()
@@ -102,7 +103,7 @@ func TestAPIHandler_CreateRecipe(t *testing.T) {
 }
 
 func TestAPIHandler_GetRecipe(t *testing.T) {
-	handler := NewAPIHandler()
+	handler := NewAPIHandler(nil)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/recipes/1", nil)
 	rctx := chi.NewRouteContext()
@@ -131,7 +132,7 @@ func TestAPIHandler_GetRecipe(t *testing.T) {
 }
 
 func TestAPIHandler_UpdateRecipe(t *testing.T) {
-	handler := NewAPIHandler()
+	handler := NewAPIHandler(nil)
 
 	req := httptest.NewRequest(http.MethodPut, "/api/recipes/1", nil)
 	rctx := chi.NewRouteContext()
@@ -157,7 +158,7 @@ func TestAPIHandler_UpdateRecipe(t *testing.T) {
 }
 
 func TestAPIHandler_DeleteRecipe(t *testing.T) {
-	handler := NewAPIHandler()
+	handler := NewAPIHandler(nil)
 
 	req := httptest.NewRequest(http.MethodDelete, "/api/recipes/1", nil)
 	rctx := chi.NewRouteContext()
@@ -183,7 +184,7 @@ func TestAPIHandler_DeleteRecipe(t *testing.T) {
 }
 
 func TestAPIHandler_InvalidMethod(t *testing.T) {
-	handler := NewAPIHandler()
+	handler := NewAPIHandler(nil)
 
 	tests := []struct {
 		name     string

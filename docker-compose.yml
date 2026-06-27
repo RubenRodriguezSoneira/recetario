@@ -1,0 +1,46 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:13
+    container_name: recipe-postgres
+    environment:
+      POSTGRES_DB: recipeapp
+      POSTGRES_USER: recipeapp
+      POSTGRES_PASSWORD: password
+      POSTGRES_HOST_AUTH_METHOD: trust
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./migrations:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U recipeapp -d recipeapp"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - recipe-network
+
+  recipe-server:
+    build: .
+    container_name: recipe-server
+    environment:
+      DATABASE_URL: postgres://recipeapp:password@postgres:5432/recipeapp?sslmode=disable
+      JWT_SECRET: your-super-secret-jwt-key-change-this-in-production
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ./backend:/app
+    networks:
+      - recipe-network
+
+volumes:
+  postgres_data:
+
+networks:
+  recipe-network:
+    driver: bridge
