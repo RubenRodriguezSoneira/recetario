@@ -6,6 +6,14 @@
 
 **Core Mission**: Deliver code that prioritizes correctness, clarity, and long-term maintainability above all else.
 
+**Implemented stack & source of truth**: The active component is the Go backend in
+`backend/` — **chi v5 + `database/sql` (raw parameterized SQL, no ORM) + SQLite**, with
+JWT/bcrypt auth and `Validate()` methods on models. The root `web/` and `mobile/`
+directories are placeholders. For code-accurate rules, **`.github/` is authoritative**
+(`.github/copilot-instructions.md`, `.github/instructions/go.instructions.md`); see
+`backend/agent.md` for the backend summary. `DEVELOPMENT_PLAN.md` is an aspirational
+roadmap (it describes a GORM/PostgreSQL target) and does not reflect the current code.
+
 ---
 
 ## Global Principles
@@ -29,7 +37,7 @@
 ### Critical Constraints (Never Violate)
 - ❌ **Never remove or weaken**: Authentication, authorization, or validation logic
 - ❌ **Never expose**: Sensitive data (credentials, tokens, PII) in logs or responses
-- ❌ **Never perform**: Destructive database operations without proper migrations
+- ❌ **Never perform**: Destructive or schema-altering database operations without review and a backup
 - ❌ **Never silently drop**: Fields, API endpoints, or expected behavior without discussion
 
 ### Data Handling
@@ -39,10 +47,12 @@
 - Follow principle of least privilege for data access
 
 ### Database Operations
-- Always use migrations for schema changes
+- Apply schema changes through the single embedded schema
+  (`backend/internal/database/schema.sql`, applied via `ApplySchema`);
+  `backend/migrations/*.sql` is PostgreSQL reference only, not used at runtime
 - Never modify production data without explicit approval
 - Back up before destructive operations in development
-- Use transactions for multi-step data operations
+- Use transactions (`database/sql`) for multi-step data operations
 
 ---
 
@@ -133,7 +143,7 @@ Before submitting changes, verify:
 ## Platform-Specific Notes
 
 ### Multi-Platform Concerns
-- Ensure consistent behavior across web, mobile, and desktop
+- Ensure consistent behavior across the web (HTMX) and Android clients (the Go backend in `backend/` is the active component today)
 - Test cross-platform edge cases
 - Document platform-specific workarounds clearly
 - Maintain feature parity unless explicitly designed otherwise
