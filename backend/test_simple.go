@@ -1,3 +1,8 @@
+//go:build ignore
+
+// Command test_simple is a standalone development script that smoke-tests the SQLite
+// integration. It is excluded from normal package builds via the build tag above;
+// run it explicitly with `go run test_simple.go`.
 package main
 
 import (

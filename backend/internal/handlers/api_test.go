@@ -3,16 +3,62 @@ package handlers
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/go-chi/chi/v5"
+	"recipe-app/internal/models"
 )
 
+// fakeRecipeStore is an in-memory RecipeStore used to exercise the API handlers
+// without a database (the sqlite driver requires cgo and the queries use the
+// PostgreSQL dialect, so unit tests inject canned data instead).
+type fakeRecipeStore struct {
+	recipes   []*models.Recipe
+	byID      map[string]*models.Recipe
+	createErr error
+}
+
+func (f *fakeRecipeStore) GetRecipes(limit, offset int, search, difficulty string, maxCookTime int) ([]*models.Recipe, error) {
+	return f.recipes, nil
+}
+
+func (f *fakeRecipeStore) GetRecipe(id string) (*models.Recipe, error) {
+	if r, ok := f.byID[id]; ok {
+		return r, nil
+	}
+	return nil, fmt.Errorf("recipe not found")
+}
+
+func (f *fakeRecipeStore) CreateRecipe(recipe *models.Recipe) error {
+	if f.createErr != nil {
+		return f.createErr
+	}
+	recipe.ID = "3"
+	return nil
+}
+
+func newTestStore() *fakeRecipeStore {
+	recipes := []*models.Recipe{
+		{ID: "1", Title: "Spaghetti Bolognese", Description: "Classic Italian pasta dish with rich meat sauce", CookTime: 30, Difficulty: "medium"},
+		{ID: "2", Title: "Chicken Curry", Description: "Spicy and aromatic Indian curry with tender chicken", CookTime: 45, Difficulty: "hard"},
+		{ID: "3", Title: "Caesar Salad", Description: "Fresh romaine lettuce with creamy Caesar dressing", CookTime: 15, Difficulty: "easy"},
+		{ID: "4", Title: "Beef Tacos", Description: "Mexican-style tacos with seasoned ground beef", CookTime: 25, Difficulty: "medium"},
+		{ID: "5", Title: "Chocolate Cake", Description: "Rich and moist chocolate cake with fudge frosting", CookTime: 60, Difficulty: "hard"},
+		{ID: "6", Title: "Greek Salad", Description: "Mediterranean salad with feta cheese and olives", CookTime: 10, Difficulty: "easy"},
+	}
+	byID := make(map[string]*models.Recipe, len(recipes))
+	for _, r := range recipes {
+		byID[r.ID] = r
+	}
+	return &fakeRecipeStore{recipes: recipes, byID: byID}
+}
+
 func TestAPIHandler_GetRecipes(t *testing.T) {
-	// For testing, we'll pass nil repository to use mock-like behavior
-	handler := NewAPIHandler(nil)
+	handler := NewAPIHandler(newTestStore())
 
 	tests := []struct {
 		name           string
@@ -25,16 +71,16 @@ func TestAPIHandler_GetRecipes(t *testing.T) {
 			method:         http.MethodGet,
 			expectedStatus: http.StatusOK,
 			expectedBody: []map[string]interface{}{
-				{"id": "1", "title": "Spaghetti Bolognese", "description": "Classic Italian pasta dish with rich meat sauce", "cook_time": 30, "difficulty": "medium"},
-				{"id": "2", "title": "Chicken Curry", "description": "Spicy and aromatic Indian curry with tender chicken", "cook_time": 45, "difficulty": "hard"},
-				{"id": "3", "title": "Caesar Salad", "description": "Fresh romaine lettuce with creamy Caesar dressing", "cook_time": 15, "difficulty": "easy"},
-				{"id": "4", "title": "Beef Tacos", "description": "Mexican-style tacos with seasoned ground beef", "cook_time": 25, "difficulty": "medium"},
-				{"id": "5", "title": "Chocolate Cake", "description": "Rich and moist chocolate cake with fudge frosting", "cook_time": 60, "difficulty": "hard"},
-				{"id": "6", "title": "Greek Salad", "description": "Mediterranean salad with feta cheese and olives", "cook_time": 10, "difficulty": "easy"},
+				{"id": "1", "title": "Spaghetti Bolognese"},
+				{"id": "2", "title": "Chicken Curry"},
+				{"id": "3", "title": "Caesar Salad"},
+				{"id": "4", "title": "Beef Tacos"},
+				{"id": "5", "title": "Chocolate Cake"},
+				{"id": "6", "title": "Greek Salad"},
 			},
 		},
 		{
-			name:           "POST to recipes endpoint handled by getRecipes method",
+			name:           "POST to recipes endpoint handled by createRecipe method",
 			method:         http.MethodPost,
 			expectedStatus: http.StatusOK,
 		},
@@ -42,7 +88,13 @@ func TestAPIHandler_GetRecipes(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			req := httptest.NewRequest(tt.method, "/api/recipes", nil)
+			var body *strings.Reader
+			if tt.method == http.MethodPost {
+				body = strings.NewReader(`{"title":"New Recipe","cook_time":10,"difficulty":"easy"}`)
+			} else {
+				body = strings.NewReader("")
+			}
+			req := httptest.NewRequest(tt.method, "/api/recipes", body)
 			w := httptest.NewRecorder()
 
 			handler.HandleRecipes(w, req)
@@ -76,9 +128,10 @@ func TestAPIHandler_GetRecipes(t *testing.T) {
 }
 
 func TestAPIHandler_CreateRecipe(t *testing.T) {
-	handler := NewAPIHandler(nil)
+	handler := NewAPIHandler(newTestStore())
 
-	req := httptest.NewRequest(http.MethodPost, "/api/recipes", nil)
+	body := strings.NewReader(`{"title":"New Recipe","cook_time":10,"difficulty":"easy"}`)
+	req := httptest.NewRequest(http.MethodPost, "/api/recipes", body)
 	w := httptest.NewRecorder()
 
 	handler.HandleCreateRecipe(w, req)
@@ -102,8 +155,21 @@ func TestAPIHandler_CreateRecipe(t *testing.T) {
 	}
 }
 
+func TestAPIHandler_CreateRecipe_InvalidBody(t *testing.T) {
+	handler := NewAPIHandler(newTestStore())
+
+	req := httptest.NewRequest(http.MethodPost, "/api/recipes", strings.NewReader("not json"))
+	w := httptest.NewRecorder()
+
+	handler.HandleCreateRecipe(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("Expected status 400 for invalid body, got %d", w.Code)
+	}
+}
+
 func TestAPIHandler_GetRecipe(t *testing.T) {
-	handler := NewAPIHandler(nil)
+	handler := NewAPIHandler(newTestStore())
 
 	req := httptest.NewRequest(http.MethodGet, "/api/recipes/1", nil)
 	rctx := chi.NewRouteContext()
@@ -131,8 +197,24 @@ func TestAPIHandler_GetRecipe(t *testing.T) {
 	}
 }
 
+func TestAPIHandler_GetRecipe_NotFound(t *testing.T) {
+	handler := NewAPIHandler(newTestStore())
+
+	req := httptest.NewRequest(http.MethodGet, "/api/recipes/999", nil)
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("id", "999")
+	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
+
+	w := httptest.NewRecorder()
+	handler.HandleRecipe(w, req)
+
+	if w.Code != http.StatusNotFound {
+		t.Errorf("Expected status 404 for missing recipe, got %d", w.Code)
+	}
+}
+
 func TestAPIHandler_UpdateRecipe(t *testing.T) {
-	handler := NewAPIHandler(nil)
+	handler := NewAPIHandler(newTestStore())
 
 	req := httptest.NewRequest(http.MethodPut, "/api/recipes/1", nil)
 	rctx := chi.NewRouteContext()
@@ -158,7 +240,7 @@ func TestAPIHandler_UpdateRecipe(t *testing.T) {
 }
 
 func TestAPIHandler_DeleteRecipe(t *testing.T) {
-	handler := NewAPIHandler(nil)
+	handler := NewAPIHandler(newTestStore())
 
 	req := httptest.NewRequest(http.MethodDelete, "/api/recipes/1", nil)
 	rctx := chi.NewRouteContext()
@@ -184,7 +266,7 @@ func TestAPIHandler_DeleteRecipe(t *testing.T) {
 }
 
 func TestAPIHandler_InvalidMethod(t *testing.T) {
-	handler := NewAPIHandler(nil)
+	handler := NewAPIHandler(newTestStore())
 
 	tests := []struct {
 		name     string

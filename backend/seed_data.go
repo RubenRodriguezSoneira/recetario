@@ -1,3 +1,8 @@
+//go:build ignore
+
+// Command seed_data is a standalone development script that seeds a PostgreSQL
+// database with sample recipes. It is excluded from normal package builds via the
+// build tag above; run it explicitly with `go run seed_data.go`.
 package main
 
 import (

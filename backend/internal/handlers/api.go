@@ -9,15 +9,24 @@ import (
 	"github.com/go-chi/chi/v5"
 	"recipe-app/internal/logger"
 	"recipe-app/internal/models"
-	"recipe-app/internal/repositories"
 )
+
+// RecipeStore describes the recipe data-access methods the APIHandler depends on.
+// Depending on an interface (rather than the concrete *repositories.RecipeRepository)
+// keeps the handler thin and testable: production code injects the real repository,
+// tests inject a fake. The concrete *repositories.RecipeRepository satisfies it.
+type RecipeStore interface {
+	GetRecipes(limit, offset int, search, difficulty string, maxCookTime int) ([]*models.Recipe, error)
+	GetRecipe(id string) (*models.Recipe, error)
+	CreateRecipe(recipe *models.Recipe) error
+}
 
 type APIHandler struct {
 	templates  *template.Template
-	recipeRepo *repositories.RecipeRepository
+	recipeRepo RecipeStore
 }
 
-func NewAPIHandler(recipeRepo *repositories.RecipeRepository) *APIHandler {
+func NewAPIHandler(recipeRepo RecipeStore) *APIHandler {
 	templates, err := template.ParseFiles("web/templates/recipe-cards.html", "web/templates/recipe-detail-content.html")
 	if err != nil {
 		// Templates not found, create empty template for tests
