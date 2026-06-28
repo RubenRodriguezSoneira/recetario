@@ -71,6 +71,10 @@ func main() {
 	authHandler := handlers.NewAuthHandler(authService, userRepo)
 	userHandler := handlers.NewUserHandler(userRepo)
 	collectionHandler := handlers.NewCollectionHandler(collectionRepo)
+	fileHandler := handlers.NewFileHandler()
+	searchHandler := handlers.NewSearchHandler(recipeRepo)
+	ingredientHandler := handlers.NewIngredientHandler(recipeRepo)
+	tagHandler := handlers.NewTagHandler(recipeRepo)
 
 	// Routes
 	r.Get("/", webHandler.HandleIndex)
@@ -89,8 +93,33 @@ func main() {
 				r.With(authService.OptionalAuthMiddleware).Get("/", apiHandler.HandleRecipe)
 				r.With(authService.AuthMiddleware).Put("/", apiHandler.HandleUpdateRecipe)
 				r.With(authService.AuthMiddleware).Delete("/", apiHandler.HandleDeleteRecipe)
+
+				// Recipe-scoped ingredients
+				r.With(authService.OptionalAuthMiddleware).Get("/ingredients", ingredientHandler.HandleList)
+				r.With(authService.AuthMiddleware).Post("/ingredients", ingredientHandler.HandleCreate)
+				r.With(authService.AuthMiddleware).Put("/ingredients/order", ingredientHandler.HandleReorder)
+				r.With(authService.AuthMiddleware).Put("/ingredients/{ingredientID}", ingredientHandler.HandleUpdate)
+				r.With(authService.AuthMiddleware).Delete("/ingredients/{ingredientID}", ingredientHandler.HandleDelete)
+
+				// Recipe-scoped tags
+				r.With(authService.OptionalAuthMiddleware).Get("/tags", tagHandler.HandleListForRecipe)
+				r.With(authService.AuthMiddleware).Post("/tags", tagHandler.HandleAdd)
+				r.With(authService.AuthMiddleware).Delete("/tags/{tag}", tagHandler.HandleDelete)
 			})
 		})
+
+		// Dedicated search and discovery
+		r.With(authService.OptionalAuthMiddleware).Get("/search", searchHandler.HandleSearch)
+		r.Get("/search/suggestions", searchHandler.HandleSuggestions)
+		r.Get("/search/tags/popular", searchHandler.HandlePopularTags)
+
+		// Tag catalog across all recipes
+		r.Get("/tags", tagHandler.HandleListAll)
+
+		// Image uploads
+		r.With(authService.AuthMiddleware).Post("/upload", fileHandler.HandleUpload)
+		r.With(authService.AuthMiddleware).Post("/upload/multiple", fileHandler.HandleMultiUpload)
+		r.With(authService.AuthMiddleware).Delete("/upload/{filename}", fileHandler.HandleDelete)
 
 		r.With(authService.AuthMiddleware).Get("/users/profile", userHandler.HandleProfile)
 		r.With(authService.AuthMiddleware).Put("/users/profile", userHandler.HandleUpdateProfile)
@@ -114,6 +143,9 @@ func main() {
 		r.With(authService.AuthMiddleware).Get("/new", webHandler.HandleNewRecipe)
 		r.Get("/{id}", webHandler.HandleRecipeDetail)
 	})
+
+	// Serve uploaded images
+	r.Get("/uploads/{filename}", fileHandler.ServeFile)
 
 	// Serve static files
 	fileServer := http.FileServer(http.Dir("web/static/"))

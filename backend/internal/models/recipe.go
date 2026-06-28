@@ -44,14 +44,29 @@ type Instruction struct {
 }
 
 type RecipeFilter struct {
+	Query       string   `json:"q"`
 	Category    string   `json:"category"`
 	Cuisine     string   `json:"cuisine"`
 	Difficulty  string   `json:"difficulty"`
 	Tags        []string `json:"tags"`
+	MinPrepTime int      `json:"min_prep_time"`
 	MaxPrepTime int      `json:"max_prep_time"`
+	MinCookTime int      `json:"min_cook_time"`
 	MaxCookTime int      `json:"max_cook_time"`
 	MinServings int      `json:"min_servings"`
 	MaxServings int      `json:"max_servings"`
+	SortBy      string   `json:"sort_by"`    // created_at, title, prep_time, cook_time, servings
+	SortOrder   string   `json:"sort_order"` // asc, desc
+}
+
+// AllowedRecipeSortFields lists the columns a recipe search may sort by. It is
+// a whitelist so SortBy can never be interpolated into SQL unchecked.
+var AllowedRecipeSortFields = map[string]bool{
+	"created_at": true,
+	"title":      true,
+	"prep_time":  true,
+	"cook_time":  true,
+	"servings":   true,
 }
 
 type SearchResult struct {
@@ -59,6 +74,12 @@ type SearchResult struct {
 	Total   int      `json:"total"`
 	Page    int      `json:"page"`
 	PerPage int      `json:"per_page"`
+}
+
+// TagCount pairs a tag with how many recipes use it, for "popular tags".
+type TagCount struct {
+	Tag   string `json:"tag"`
+	Count int    `json:"count"`
 }
 
 func (r *Recipe) Validate() error {
@@ -84,8 +105,14 @@ func (rf *RecipeFilter) Validate() error {
 	if rf.Difficulty != "" && rf.Difficulty != "easy" && rf.Difficulty != "medium" && rf.Difficulty != "hard" {
 		return fmt.Errorf("difficulty must be easy, medium, or hard")
 	}
+	if rf.MinPrepTime < 0 {
+		return fmt.Errorf("min prep time cannot be negative")
+	}
 	if rf.MaxPrepTime < 0 {
 		return fmt.Errorf("max prep time cannot be negative")
+	}
+	if rf.MinCookTime < 0 {
+		return fmt.Errorf("min cook time cannot be negative")
 	}
 	if rf.MaxCookTime < 0 {
 		return fmt.Errorf("max cook time cannot be negative")
@@ -96,8 +123,20 @@ func (rf *RecipeFilter) Validate() error {
 	if rf.MaxServings < 0 {
 		return fmt.Errorf("max servings cannot be negative")
 	}
+	if rf.MinPrepTime > 0 && rf.MaxPrepTime > 0 && rf.MinPrepTime > rf.MaxPrepTime {
+		return fmt.Errorf("min prep time cannot be greater than max prep time")
+	}
+	if rf.MinCookTime > 0 && rf.MaxCookTime > 0 && rf.MinCookTime > rf.MaxCookTime {
+		return fmt.Errorf("min cook time cannot be greater than max cook time")
+	}
 	if rf.MinServings > 0 && rf.MaxServings > 0 && rf.MinServings > rf.MaxServings {
 		return fmt.Errorf("min servings cannot be greater than max servings")
+	}
+	if rf.SortBy != "" && !AllowedRecipeSortFields[rf.SortBy] {
+		return fmt.Errorf("invalid sort field")
+	}
+	if rf.SortOrder != "" && rf.SortOrder != "asc" && rf.SortOrder != "desc" {
+		return fmt.Errorf("sort order must be asc or desc")
 	}
 	return nil
 }
