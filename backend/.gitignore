@@ -1,0 +1,10 @@
+# Compiled server binary
+recipe-server
+recipe-server.exe
+
+# Local SQLite databases (runtime artifacts)
+*.db
+
+# Test and coverage output
+*.out
+coverage.txt

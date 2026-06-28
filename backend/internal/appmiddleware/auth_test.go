@@ -14,21 +14,21 @@ func TestAuthService_GenerateToken(t *testing.T) {
 
 	tests := []struct {
 		name    string
-		userID  int
+		userID  string
 		email   string
 		isAdmin bool
 		wantErr bool
 	}{
 		{
 			name:    "Valid token generation",
-			userID:  1,
+			userID:  "1",
 			email:   "test@example.com",
 			isAdmin: false,
 			wantErr: false,
 		},
 		{
 			name:    "Admin token generation",
-			userID:  2,
+			userID:  "2",
 			email:   "admin@example.com",
 			isAdmin: true,
 			wantErr: false,
@@ -54,7 +54,7 @@ func TestAuthService_GenerateToken(t *testing.T) {
 				}
 
 				if claims.UserID != tt.userID {
-					t.Errorf("Expected UserID %d, got %d", tt.userID, claims.UserID)
+					t.Errorf("Expected UserID %s, got %s", tt.userID, claims.UserID)
 				}
 
 				if claims.Email != tt.email {
@@ -73,29 +73,29 @@ func TestAuthService_ValidateToken(t *testing.T) {
 	secret := "test-secret-key"
 	auth := NewAuthService(secret)
 
-	validToken, _ := auth.GenerateToken(1, "test@example.com", false)
-	adminToken, _ := auth.GenerateToken(2, "admin@example.com", true)
+	validToken, _ := auth.GenerateToken("1", "test@example.com", false)
+	adminToken, _ := auth.GenerateToken("2", "admin@example.com", true)
 
 	tests := []struct {
 		name      string
 		token     string
 		wantErr   bool
 		wantAdmin bool
-		wantID    int
+		wantID    string
 	}{
 		{
 			name:      "Valid user token",
 			token:     validToken,
 			wantErr:   false,
 			wantAdmin: false,
-			wantID:    1,
+			wantID:    "1",
 		},
 		{
 			name:      "Valid admin token",
 			token:     adminToken,
 			wantErr:   false,
 			wantAdmin: true,
-			wantID:    2,
+			wantID:    "2",
 		},
 		{
 			name:    "Invalid token",
@@ -119,7 +119,7 @@ func TestAuthService_ValidateToken(t *testing.T) {
 
 			if !tt.wantErr {
 				if claims.UserID != tt.wantID {
-					t.Errorf("Expected UserID %d, got %d", tt.wantID, claims.UserID)
+					t.Errorf("Expected UserID %s, got %s", tt.wantID, claims.UserID)
 				}
 
 				if claims.IsAdmin != tt.wantAdmin {
@@ -135,7 +135,7 @@ func TestAuthService_ExpiredToken(t *testing.T) {
 	auth := NewAuthService(secret)
 	auth.TokenExpiry = -1 * time.Hour // Expired 1 hour ago
 
-	expiredToken, err := auth.GenerateToken(1, "test@example.com", false)
+	expiredToken, err := auth.GenerateToken("1", "test@example.com", false)
 	if err != nil {
 		t.Fatalf("Failed to generate expired token: %v", err)
 	}
@@ -150,7 +150,7 @@ func TestAuthMiddleware(t *testing.T) {
 	secret := "test-secret-key"
 	auth := NewAuthService(secret)
 
-	token, _ := auth.GenerateToken(1, "test@example.com", false)
+	token, _ := auth.GenerateToken("1", "test@example.com", false)
 
 	tests := []struct {
 		name           string
@@ -205,8 +205,8 @@ func TestAuthMiddleware(t *testing.T) {
 					if !ok {
 						t.Error("Expected user ID in context")
 					}
-					if userID != 1 {
-						t.Errorf("Expected user ID 1, got %d", userID)
+					if userID != "1" {
+						t.Errorf("Expected user ID 1, got %s", userID)
 					}
 				} else if ok {
 					t.Error("Unexpected user ID in context")
@@ -227,7 +227,7 @@ func TestOptionalAuthMiddleware(t *testing.T) {
 	secret := "test-secret-key"
 	auth := NewAuthService(secret)
 
-	token, _ := auth.GenerateToken(1, "test@example.com", false)
+	token, _ := auth.GenerateToken("1", "test@example.com", false)
 
 	tests := []struct {
 		name           string
@@ -270,8 +270,8 @@ func TestOptionalAuthMiddleware(t *testing.T) {
 					if !ok {
 						t.Error("Expected user ID in context")
 					}
-					if userID != 1 {
-						t.Errorf("Expected user ID 1, got %d", userID)
+					if userID != "1" {
+						t.Errorf("Expected user ID 1, got %s", userID)
 					}
 				} else if ok {
 					t.Error("Unexpected user ID in context")
@@ -292,8 +292,8 @@ func TestRequireAdmin(t *testing.T) {
 	secret := "test-secret-key"
 	auth := NewAuthService(secret)
 
-	userToken, _ := auth.GenerateToken(1, "user@example.com", false)
-	adminToken, _ := auth.GenerateToken(2, "admin@example.com", true)
+	userToken, _ := auth.GenerateToken("1", "user@example.com", false)
+	adminToken, _ := auth.GenerateToken("2", "admin@example.com", true)
 
 	tests := []struct {
 		name           string
@@ -344,7 +344,7 @@ func TestGetUserClaims(t *testing.T) {
 	ctx := context.Background()
 
 	claims := &Claims{
-		UserID:  1,
+		UserID:  "1",
 		Email:   "test@example.com",
 		IsAdmin: false,
 	}

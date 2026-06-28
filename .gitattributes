@@ -1,0 +1,23 @@
+# Normalize line endings: store text as LF and check out as LF on every platform.
+# This prevents CRLF/LF churn across editors and operating systems.
+* text=auto eol=lf
+
+# Binary files: never apply line-ending conversion.
+*.db       binary
+*.sqlite   binary
+*.sqlite3  binary
+*.png      binary
+*.jpg      binary
+*.jpeg     binary
+*.gif      binary
+*.ico      binary
+*.pdf      binary
+*.jks      binary
+*.keystore binary
+*.apk      binary
+*.aab      binary
+*.hprof    binary
+
+# Windows-only scripts must keep CRLF to run correctly.
+*.bat text eol=crlf
+*.cmd text eol=crlf

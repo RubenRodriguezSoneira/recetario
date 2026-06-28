@@ -13,6 +13,7 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 
 	appmiddleware "recipe-app/internal/appmiddleware"
+	"recipe-app/internal/database"
 	"recipe-app/internal/handlers"
 	"recipe-app/internal/logger"
 	"recipe-app/internal/repositories"
@@ -47,6 +48,8 @@ func main() {
 
 	// Initialize repositories
 	recipeRepo := repositories.NewRecipeRepository(db)
+	userRepo := repositories.NewUserRepository(db)
+	collectionRepo := repositories.NewCollectionRepository(db)
 
 	r := chi.NewRouter()
 
@@ -65,8 +68,9 @@ func main() {
 	// Initialize handlers
 	webHandler := handlers.NewWebHandler()
 	apiHandler := handlers.NewAPIHandler(recipeRepo)
-	authHandler := handlers.NewAuthHandler(authService)
-	userHandler := handlers.NewUserHandler()
+	authHandler := handlers.NewAuthHandler(authService, userRepo)
+	userHandler := handlers.NewUserHandler(userRepo)
+	collectionHandler := handlers.NewCollectionHandler(collectionRepo)
 
 	// Routes
 	r.Get("/", webHandler.HandleIndex)
@@ -90,6 +94,19 @@ func main() {
 
 		r.With(authService.AuthMiddleware).Get("/users/profile", userHandler.HandleProfile)
 		r.With(authService.AuthMiddleware).Put("/users/profile", userHandler.HandleUpdateProfile)
+
+		r.Route("/collections", func(r chi.Router) {
+			r.Use(authService.AuthMiddleware)
+			r.Get("/", collectionHandler.HandleList)
+			r.Post("/", collectionHandler.HandleCreate)
+			r.Route("/{id}", func(r chi.Router) {
+				r.Get("/", collectionHandler.HandleGet)
+				r.Put("/", collectionHandler.HandleUpdate)
+				r.Delete("/", collectionHandler.HandleDelete)
+				r.Post("/recipes", collectionHandler.HandleAddRecipe)
+				r.Delete("/recipes/{recipeID}", collectionHandler.HandleRemoveRecipe)
+			})
+		})
 	})
 
 	r.Route("/recipes", func(r chi.Router) {
@@ -117,64 +134,9 @@ func getJWTSecret() string {
 }
 
 func createTables(db *sql.DB) error {
-	queries := []string{
-		`CREATE TABLE IF NOT EXISTS users (
-			id TEXT PRIMARY KEY,
-			email TEXT UNIQUE NOT NULL,
-			username TEXT UNIQUE NOT NULL,
-			first_name TEXT,
-			last_name TEXT,
-			password TEXT NOT NULL,
-			avatar_url TEXT,
-			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-			updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
-		)`,
-		`CREATE TABLE IF NOT EXISTS recipes (
-			id TEXT PRIMARY KEY,
-			title TEXT NOT NULL,
-			description TEXT,
-			prep_time INTEGER,
-			cook_time INTEGER,
-			servings INTEGER,
-			difficulty TEXT CHECK (difficulty IN ('easy', 'medium', 'hard')),
-			category TEXT,
-			cuisine TEXT,
-			image_url TEXT,
-			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-			updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
-		)`,
-		`CREATE TABLE IF NOT EXISTS ingredients (
-			id TEXT PRIMARY KEY,
-			recipe_id TEXT NOT NULL,
-			name TEXT NOT NULL,
-			amount TEXT,
-			unit TEXT,
-			notes TEXT,
-			position INTEGER NOT NULL,
-			created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-		)`,
-		`CREATE TABLE IF NOT EXISTS instructions (
-			id TEXT PRIMARY KEY,
-			recipe_id TEXT NOT NULL,
-			text TEXT NOT NULL,
-			position INTEGER NOT NULL,
-			duration INTEGER,
-			temperature INTEGER,
-			created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-		)`,
-		`CREATE TABLE IF NOT EXISTS recipe_tags (
-			recipe_id TEXT NOT NULL,
-			tag TEXT NOT NULL,
-			PRIMARY KEY (recipe_id, tag)
-		)`,
+	if err := database.ApplySchema(db); err != nil {
+		return fmt.Errorf("failed to create tables: %w", err)
 	}
-
-	for _, query := range queries {
-		if _, err := db.Exec(query); err != nil {
-			return fmt.Errorf("failed to create table: %w", err)
-		}
-	}
-
 	return nil
 }
 
@@ -255,12 +217,26 @@ func seedData(db *sql.DB) error {
 		},
 	}
 
-	// Insert recipes
+	// Create the sample user first so seeded recipes can reference it.
+	userQuery := `INSERT OR IGNORE INTO users (id, email, username, first_name, last_name, password_hash, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`
+	if _, err := db.Exec(userQuery,
+		"user1",
+		"demo@recipeapp.com",
+		"demo",
+		"Demo",
+		"User",
+		"$2a$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi", // bcrypt hash of "password"
+	); err != nil {
+		return fmt.Errorf("failed to create user: %w", err)
+	}
+
+	// Insert recipes owned by the sample user.
 	for _, recipe := range recipes {
-		query := `INSERT INTO recipes (id, title, description, prep_time, cook_time, servings, difficulty, category, cuisine, image_url, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`
+		query := `INSERT OR IGNORE INTO recipes (id, user_id, title, description, prep_time, cook_time, servings, difficulty, category, cuisine, image_url, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`
 
 		_, err := db.Exec(query,
 			recipe["id"],
+			"user1",
 			recipe["title"],
 			recipe["description"],
 			recipe["prep_time"],
@@ -274,20 +250,6 @@ func seedData(db *sql.DB) error {
 		if err != nil {
 			return fmt.Errorf("failed to insert recipe %s: %w", recipe["title"], err)
 		}
-	}
-
-	// Create sample user
-	userQuery := `INSERT INTO users (id, email, username, first_name, last_name, password, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`
-	_, err := db.Exec(userQuery,
-		"user1",
-		"demo@recipeapp.com",
-		"demo",
-		"Demo",
-		"User",
-		"$2a$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi", // password
-	)
-	if err != nil {
-		return fmt.Errorf("failed to create user: %w", err)
 	}
 
 	return nil

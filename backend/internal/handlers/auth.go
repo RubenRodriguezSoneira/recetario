@@ -6,18 +6,38 @@ import (
 	"strings"
 
 	"golang.org/x/crypto/bcrypt"
+
 	appmiddleware "recipe-app/internal/appmiddleware"
 	"recipe-app/internal/logger"
+	"recipe-app/internal/models"
 )
+
+// tokenExpiresInSeconds mirrors the AuthService token expiry (24h) reported to clients.
+const tokenExpiresInSeconds = 86400
+
+// UserStore describes the user data-access methods the auth and user handlers
+// depend on. The concrete *repositories.UserRepository satisfies it; tests inject
+// a fake.
+type UserStore interface {
+	CreateUser(user *models.User) error
+	GetUserByID(id string) (*models.User, error)
+	GetUserByEmail(email string) (*models.User, error)
+	EmailExists(email string) (bool, error)
+	UsernameExists(username string) (bool, error)
+	UpdateUser(user *models.User) error
+}
 
 type AuthHandler struct {
 	authService *appmiddleware.AuthService
+	users       UserStore
 }
 
 type RegisterRequest struct {
-	Email    string `json:"email"`
-	Password string `json:"password"`
-	Name     string `json:"name"`
+	Email     string `json:"email"`
+	Username  string `json:"username"`
+	Password  string `json:"password"`
+	FirstName string `json:"first_name"`
+	LastName  string `json:"last_name"`
 }
 
 type LoginRequest struct {
@@ -31,20 +51,34 @@ type AuthResponse struct {
 	ExpiresIn int64  `json:"expires_in"`
 }
 
+// User is the public representation of a user (never includes the password hash).
 type User struct {
-	ID    int    `json:"id"`
-	Email string `json:"email"`
-	Name  string `json:"name"`
+	ID        string `json:"id"`
+	Email     string `json:"email"`
+	Username  string `json:"username"`
+	FirstName string `json:"first_name"`
+	LastName  string `json:"last_name"`
 }
 
-func NewAuthHandler(authService *appmiddleware.AuthService) *AuthHandler {
+func toPublicUser(u *models.User) User {
+	return User{
+		ID:        u.ID,
+		Email:     u.Email,
+		Username:  u.Username,
+		FirstName: u.FirstName,
+		LastName:  u.LastName,
+	}
+}
+
+func NewAuthHandler(authService *appmiddleware.AuthService, users UserStore) *AuthHandler {
 	return &AuthHandler{
 		authService: authService,
+		users:       users,
 	}
 }
 
 func (h *AuthHandler) HandleRegister(w http.ResponseWriter, r *http.Request) {
-	ctx := r.Context()
+	log := logger.FromContext(r.Context())
 
 	var req RegisterRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -52,43 +86,68 @@ func (h *AuthHandler) HandleRegister(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if len(req.Email) == 0 || len(req.Password) < 8 {
-		http.Error(w, "Invalid email or password (min 8 chars)", http.StatusBadRequest)
+	req.Email = strings.TrimSpace(req.Email)
+	req.Username = strings.TrimSpace(req.Username)
+	if req.Email == "" || req.Username == "" || len(req.Password) < 8 {
+		http.Error(w, "email, username and password (min 8 chars) are required", http.StatusBadRequest)
 		return
 	}
 
-	_, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
+	emailTaken, err := h.users.EmailExists(req.Email)
 	if err != nil {
-		logger.LogError(ctx, err, "Password hashing failed")
+		log.Error("Failed to check email existence", "error", err)
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		return
+	}
+	usernameTaken, err := h.users.UsernameExists(req.Username)
+	if err != nil {
+		log.Error("Failed to check username existence", "error", err)
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		return
+	}
+	if emailTaken || usernameTaken {
+		http.Error(w, "email or username already in use", http.StatusConflict)
+		return
+	}
+
+	hash, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
+	if err != nil {
+		log.Error("Password hashing failed", "error", err)
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
 		return
 	}
 
-	user := User{
-		ID:    1,
-		Email: req.Email,
-		Name:  req.Name,
+	user := &models.User{
+		Email:     req.Email,
+		Username:  req.Username,
+		FirstName: req.FirstName,
+		LastName:  req.LastName,
+		Password:  string(hash),
+	}
+	if err := h.users.CreateUser(user); err != nil {
+		log.Error("Failed to create user", "error", err)
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		return
 	}
 
 	token, err := h.authService.GenerateToken(user.ID, user.Email, false)
 	if err != nil {
-		logger.LogError(ctx, err, "Token generation failed")
+		log.Error("Token generation failed", "error", err)
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
 		return
 	}
 
-	response := AuthResponse{
-		Token:     token,
-		User:      user,
-		ExpiresIn: 86400,
-	}
-
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(response)
+	w.WriteHeader(http.StatusCreated)
+	json.NewEncoder(w).Encode(AuthResponse{
+		Token:     token,
+		User:      toPublicUser(user),
+		ExpiresIn: tokenExpiresInSeconds,
+	})
 }
 
 func (h *AuthHandler) HandleLogin(w http.ResponseWriter, r *http.Request) {
-	ctx := r.Context()
+	log := logger.FromContext(r.Context())
 
 	var req LoginRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -96,45 +155,41 @@ func (h *AuthHandler) HandleLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if len(req.Email) == 0 || len(req.Password) == 0 {
-		http.Error(w, "Email and password required", http.StatusBadRequest)
+	if req.Email == "" || req.Password == "" {
+		http.Error(w, "email and password required", http.StatusBadRequest)
 		return
 	}
 
-	user := User{
-		ID:    1,
-		Email: req.Email,
-		Name:  "Test User",
+	user, err := h.users.GetUserByEmail(req.Email)
+	if err != nil {
+		// Do not reveal whether the email exists; log server-side only.
+		log.Info("Login failed: user lookup", "error", err)
+		http.Error(w, "invalid credentials", http.StatusUnauthorized)
+		return
 	}
 
-	if err := bcrypt.CompareHashAndPassword([]byte("$2a$10$example.hash"), []byte(req.Password)); err != nil {
-		if strings.Contains(req.Password, "password") {
-			user.Name = "Demo User"
-		} else {
-			http.Error(w, "Invalid credentials", http.StatusUnauthorized)
-			return
-		}
+	if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(req.Password)); err != nil {
+		http.Error(w, "invalid credentials", http.StatusUnauthorized)
+		return
 	}
 
 	token, err := h.authService.GenerateToken(user.ID, user.Email, false)
 	if err != nil {
-		logger.LogError(ctx, err, "Token generation failed")
+		log.Error("Token generation failed", "error", err)
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
 		return
 	}
 
-	response := AuthResponse{
-		Token:     token,
-		User:      user,
-		ExpiresIn: 86400,
-	}
-
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(response)
+	json.NewEncoder(w).Encode(AuthResponse{
+		Token:     token,
+		User:      toPublicUser(user),
+		ExpiresIn: tokenExpiresInSeconds,
+	})
 }
 
 func (h *AuthHandler) HandleRefresh(w http.ResponseWriter, r *http.Request) {
-	ctx := r.Context()
+	log := logger.FromContext(r.Context())
 
 	authHeader := r.Header.Get("Authorization")
 	if authHeader == "" {
@@ -150,23 +205,21 @@ func (h *AuthHandler) HandleRefresh(w http.ResponseWriter, r *http.Request) {
 
 	claims, err := h.authService.ValidateToken(tokenParts[1])
 	if err != nil {
-		logger.LogError(ctx, err, "Token validation failed")
+		log.Info("Token validation failed", "error", err)
 		http.Error(w, "Invalid token", http.StatusUnauthorized)
 		return
 	}
 
 	newToken, err := h.authService.GenerateToken(claims.UserID, claims.Email, claims.IsAdmin)
 	if err != nil {
-		logger.LogError(ctx, err, "Token generation failed")
+		log.Error("Token generation failed", "error", err)
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
 		return
 	}
 
-	response := map[string]interface{}{
-		"token":      newToken,
-		"expires_in": 86400,
-	}
-
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(response)
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"token":      newToken,
+		"expires_in": tokenExpiresInSeconds,
+	})
 }

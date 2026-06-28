@@ -8,40 +8,44 @@ import (
 	"recipe-app/internal/logger"
 )
 
-type UserHandler struct{}
-
-type ProfileUpdateRequest struct {
-	Name  string `json:"name"`
-	Email string `json:"email"`
+type UserHandler struct {
+	users UserStore
 }
 
-func NewUserHandler() *UserHandler {
-	return &UserHandler{}
+type ProfileUpdateRequest struct {
+	FirstName string `json:"first_name"`
+	LastName  string `json:"last_name"`
+	AvatarURL string `json:"avatar_url"`
+}
+
+func NewUserHandler(users UserStore) *UserHandler {
+	return &UserHandler{users: users}
 }
 
 func (h *UserHandler) HandleProfile(w http.ResponseWriter, r *http.Request) {
-	ctx := r.Context()
+	log := logger.FromContext(r.Context())
 
-	userID, ok := appmiddleware.GetUserID(ctx)
+	userID, ok := appmiddleware.GetUserID(r.Context())
 	if !ok {
 		http.Error(w, "User not found", http.StatusUnauthorized)
 		return
 	}
 
-	user := User{
-		ID:    userID,
-		Email: "user@example.com",
-		Name:  "Test User",
+	user, err := h.users.GetUserByID(userID)
+	if err != nil {
+		log.Info("Profile lookup failed", "error", err)
+		http.Error(w, "User not found", http.StatusNotFound)
+		return
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(user)
+	json.NewEncoder(w).Encode(toPublicUser(user))
 }
 
 func (h *UserHandler) HandleUpdateProfile(w http.ResponseWriter, r *http.Request) {
-	ctx := r.Context()
+	log := logger.FromContext(r.Context())
 
-	userID, ok := appmiddleware.GetUserID(ctx)
+	userID, ok := appmiddleware.GetUserID(r.Context())
 	if !ok {
 		http.Error(w, "User not found", http.StatusUnauthorized)
 		return
@@ -53,14 +57,23 @@ func (h *UserHandler) HandleUpdateProfile(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	logger.FromContext(ctx).Info("Profile update requested", "user_id", userID, "name", req.Name)
+	user, err := h.users.GetUserByID(userID)
+	if err != nil {
+		log.Info("Profile lookup failed", "error", err)
+		http.Error(w, "User not found", http.StatusNotFound)
+		return
+	}
 
-	user := User{
-		ID:    userID,
-		Email: req.Email,
-		Name:  req.Name,
+	user.FirstName = req.FirstName
+	user.LastName = req.LastName
+	user.AvatarURL = req.AvatarURL
+
+	if err := h.users.UpdateUser(user); err != nil {
+		log.Error("Failed to update profile", "error", err)
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		return
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(user)
+	json.NewEncoder(w).Encode(toPublicUser(user))
 }

@@ -1,3 +1,13 @@
+-- =============================================================================
+-- PostgreSQL reference schema — NOT used by the running application.
+--
+-- The Go service runs on SQLite and applies its schema from the embedded
+-- backend/internal/database/schema.sql via database.ApplySchema(). This file is
+-- kept only as a PostgreSQL reference (the aspirational target described in
+-- DEVELOPMENT_PLAN.md) and relies on PostgreSQL-only features (uuid-ossp, UUID,
+-- TIMESTAMPTZ, tsvector) that are not valid in SQLite.
+-- =============================================================================
+
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
 -- Users table
