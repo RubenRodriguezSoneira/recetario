@@ -6,7 +6,7 @@ This document provides step-by-step instructions for setting up and running the 
 
 ### Prerequisites
 - Go 1.25.6+
-- A C compiler (e.g. `gcc`) with `CGO_ENABLED=1` — required to build the SQLite driver
+- No C compiler needed — the SQLite driver (`modernc.org/sqlite`) is pure Go (builds with `CGO_ENABLED=0`)
 
 ### Run the server
 ```bash
@@ -174,9 +174,11 @@ curl -X POST -H "Content-Type: application/json" \
 - **Error**: Module dependency issues
 - **Solution**: Run `go mod tidy` to fix dependencies
 
-#### CGO / SQLite Build Errors
-- **Error**: `cgo: C compiler ... not found` or SQLite driver fails to build
-- **Solution**: Install a C compiler (e.g. `gcc`) and build with `CGO_ENABLED=1`
+#### SQLite Driver Errors (legacy CGO)
+- **Error**: `go-sqlite3 requires cgo to work` or `cgo: C compiler ... not found`
+- **Solution**: These come from the old CGO driver. This project uses the pure-Go
+  driver `modernc.org/sqlite` (no C compiler needed). Run `go mod tidy` and rebuild;
+  ensure `cmd/main.go` imports `modernc.org/sqlite` and opens `sql.Open("sqlite", ...)`.
 
 ## 📚 Development Workflow
 

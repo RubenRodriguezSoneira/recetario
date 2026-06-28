@@ -18,8 +18,8 @@ func Schema() string {
 }
 
 // ApplySchema creates every table the application needs if it does not already
-// exist. It is safe to call repeatedly. The go-sqlite3 driver executes the
-// multi-statement script in a single Exec because the script carries no
+// exist. It is safe to call repeatedly. The modernc.org/sqlite driver executes
+// the multi-statement script in a single Exec because the script carries no
 // bound parameters.
 func ApplySchema(db *sql.DB) error {
 	if _, err := db.Exec(schemaSQL); err != nil {

@@ -9,7 +9,7 @@
 - **Language:** Go 1.25
 - **Router:** chi v5 (`github.com/go-chi/chi/v5`)
 - **Data access:** `database/sql` with raw, parameterized SQL — **no ORM**
-- **Driver:** `mattn/go-sqlite3` (SQLite, used by `cmd/main.go` at runtime)
+- **Driver:** `modernc.org/sqlite` (pure-Go SQLite, used by `cmd/main.go` at runtime; driver name `"sqlite"`, no CGO)
 - **Authentication:** JWT (`github.com/golang-jwt/jwt/v5`) + bcrypt
   (`golang.org/x/crypto/bcrypt`)
 - **Validation:** no third-party library — models expose `Validate() error` methods
@@ -123,10 +123,11 @@ func (r *UserRepository) GetUserByID(id string) (*models.User, error) {
 
 ## Testing
 - **Table-driven tests.** Handlers: `net/http/httptest` with interface fakes (see
-  `internal/handlers/*_test.go`). Repositories: real SQLite tests (require cgo/gcc).
+  `internal/handlers/*_test.go`). Repositories: real SQLite tests (pure Go via
+  `modernc.org/sqlite` — no cgo/gcc required).
 - Never disable or skip a failing test to make a build pass — fix the root cause.
 - Finish every change green: `go build ./...` and `go test ./...` from `backend/`.
-  (Repository cgo tests run in CI on Linux even when a local toolchain lacks gcc.)
+  (Tests run anywhere with `CGO_ENABLED=0`; no C compiler needed.)
 
 ```go
 func TestValidate(t *testing.T) {

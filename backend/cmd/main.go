@@ -9,7 +9,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	chiMiddleware "github.com/go-chi/chi/v5/middleware"
-	_ "github.com/mattn/go-sqlite3"
+	_ "modernc.org/sqlite"
 
 	appmiddleware "recipe-app/internal/appmiddleware"
 	"recipe-app/internal/database"
@@ -23,7 +23,7 @@ func main() {
 
 	// Initialize SQLite database
 	dbPath := "recipeapp.db"
-	db, err := sql.Open("sqlite3", dbPath)
+	db, err := sql.Open("sqlite", dbPath)
 	if err != nil {
 		log.Error("Failed to connect to SQLite database", "error", err)
 		os.Exit(1)

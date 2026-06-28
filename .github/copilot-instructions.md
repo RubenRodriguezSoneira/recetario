@@ -27,7 +27,7 @@ agent and skill in this repository. Language-specific rules live in
 - **Stack (as actually implemented)**:
   - Go 1.25, router **chi v5**
   - **`database/sql`** with raw, parameterized SQL — **no ORM**
-  - Driver: `mattn/go-sqlite3` (SQLite, used by `main.go`)
+  - Driver: `modernc.org/sqlite` (pure-Go SQLite, used by `main.go`; driver name `"sqlite"`, no CGO)
   - Auth: **JWT** (`golang-jwt/jwt/v5`) + **bcrypt** (`golang.org/x/crypto/bcrypt`)
   - No third-party validation library — models expose `Validate() error` methods
 - **Layering (current reality)**: `cmd/main.go` wires chi routes → `handlers` →
@@ -53,7 +53,7 @@ agent and skill in this repository. Language-specific rules live in
 Default stance: **do not add dependencies**. Preference order:
 
 1. Go standard library
-2. Existing project dependencies (chi, golang-jwt, x/crypto, go-sqlite3, uuid)
+2. Existing project dependencies (chi, golang-jwt, x/crypto, modernc.org/sqlite, uuid)
 3. A new, well-established library — only with explicit justification
 
 If you add one, run `go mod tidy` and explain why in the change description.
