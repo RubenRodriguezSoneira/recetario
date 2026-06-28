@@ -29,8 +29,8 @@ The server will start on `:8080` with:
 - API endpoints at `/api/*`
 - Web interface at `/`
 
-Building the SQLite driver requires CGO, so a C compiler (e.g. `gcc`) must be
-available and `CGO_ENABLED=1` (the Go default for native builds).
+The SQLite driver is pure Go (`modernc.org/sqlite`), so no CGO or C compiler is
+required — the server builds and runs with `CGO_ENABLED=0`.
 
 ### Database Setup
 
@@ -80,7 +80,7 @@ go test ./...
 ## Tech Stack
 
 - **Backend**: Go, chi router, `database/sql` (no ORM)
-- **Database**: SQLite (`mattn/go-sqlite3`)
+- **Database**: SQLite (`modernc.org/sqlite`, pure Go — no CGO)
 - **Auth**: JWT (`golang-jwt`) with bcrypt password hashing
 - **Web**: HTMX, Tailwind CSS
 - **Mobile**: Android (Kotlin)

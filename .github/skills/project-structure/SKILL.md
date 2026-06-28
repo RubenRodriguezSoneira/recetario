@@ -51,7 +51,7 @@ internal/handlers  ──►  internal/services (optional)  ──►  internal/
 
 ## Composition Root (`cmd/main.go`)
 
-Everything is wired here: open the SQLite DB (`sql.Open("sqlite3", ...)`), `createTables`,
+Everything is wired here: open the SQLite DB (`sql.Open("sqlite", ...)`), `createTables`,
 `seedData`, construct repositories and handlers via `NewXxx`, build the chi router, and
 register the middleware chain in order:
 
