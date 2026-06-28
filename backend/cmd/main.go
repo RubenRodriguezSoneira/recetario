@@ -9,7 +9,6 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	chiMiddleware "github.com/go-chi/chi/v5/middleware"
-	_ "github.com/lib/pq"
 	_ "github.com/mattn/go-sqlite3"
 
 	appmiddleware "recipe-app/internal/appmiddleware"
