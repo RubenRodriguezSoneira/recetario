@@ -17,13 +17,13 @@ backend/
   cmd/                 # main.go: entry point, DB open, table creation, route wiring
   internal/
     appmiddleware/     # chi middleware: auth, CORS, rate limit, error, security headers
+    database/          # embedded schema.sql + ApplySchema()
     handlers/          # HTTP handlers (one struct per area: APIHandler, AuthHandler, ...)
     logger/            # structured logger, context helpers (logger.FromContext)
     models/            # domain structs + Validate() methods
     repositories/      # data access: database/sql, one struct per aggregate
     services/          # business logic (currently empty — add only when justified)
     storage/           # storage helpers (currently empty)
-  migrations/          # SQL schema files
   web/                 # templates + static assets served by the Go process
 ```
 
@@ -64,10 +64,10 @@ backend/
 
 - One repository struct per aggregate, holding `db *sql.DB`.
 - **Always** use placeholders and pass args separately. Never concatenate user input into
-  SQL. The Postgres dialect uses `$1, $2, ...`; the SQLite paths in `main.go` use `?`.
-- For dynamic filters, append `fmt.Sprintf(" AND col = $%d", argIndex)` with an incrementing
-  index and append the value to the args slice (existing `GetRecipes` pattern) — the values
-  still go through placeholders, never string interpolation of user data.
+  SQL. SQLite uses `?` placeholders.
+- For dynamic filters, append ` AND col = ?` to the query and append the matching value to
+  the args slice (existing `GetRecipes` pattern) — the values still go through placeholders,
+  never string interpolation of user data.
 - Single-row reads use `QueryRow(...).Scan(...)`; translate `sql.ErrNoRows` into a
   not-found error instead of returning it raw.
 - Multi-row reads use `Query(...)`, **always** `defer rows.Close()`, scan in the loop, and

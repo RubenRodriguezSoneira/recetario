@@ -6,57 +6,26 @@ This document provides step-by-step instructions for setting up and running the 
 
 ### Prerequisites
 - Go 1.25.6+
-- PostgreSQL (recommended) or SQLite (fallback)
+- A C compiler (e.g. `gcc`) with `CGO_ENABLED=1` — required to build the SQLite driver
 
-### Option 1: Using Docker with PostgreSQL (Easiest)
+### Run the server
 ```bash
-# Clone and navigate to the project
-cd recipe-app
-
-# Start PostgreSQL and RecipeApp
-docker-compose up -d
-
-# Wait for services to be ready
-sleep 10
-
-# Check that everything is running
-docker-compose ps
+cd backend
+go build -o recipe-server ./cmd
+./recipe-server
 ```
 
 The server will be available at: http://localhost:8080
 
-### Option 2: Local PostgreSQL Setup
-```bash
-# Run the setup script
-./backend/setup_postgres.sh
-
-# After setup completes:
-cd backend
-export DATABASE_URL="postgres://recipeapp:password@localhost:5432/recipeapp?sslmode=disable"
-go build -o recipe-server ./cmd
-./recipe-server
-```
-
-### Option 3: Quick SQLite Setup (No additional setup needed)
-```bash
-# Just run the server (it will use mock data by default)
-cd backend
-go build -o recipe-server ./cmd
-./recipe-server
-```
+On first run it creates `recipeapp.db` in the `backend/` directory, applies the
+schema (`internal/database/schema.sql`), and seeds sample data — no additional
+setup is required.
 
 ## 📊 Database Setup Details
 
-### PostgreSQL Database
-- **Database Name**: recipeapp
-- **User**: recipeapp  
-- **Password**: password
-- **Host**: localhost
-- **Port**: 5432
-- **Connection String**: `postgres://recipeapp:password@localhost:5432/recipeapp?sslmode=disable`
-
 ### SQLite Database (Local Development)
-- **Database File**: recipeapp.db (created automatically)
+- **Database File**: `recipeapp.db` (created automatically in `backend/`)
+- **Schema**: applied at startup from `internal/database/schema.sql`
 - **No additional setup required**
 
 ## 🌐 Running the Server
@@ -115,10 +84,13 @@ The RecipeApp server provides:
 
 ### Using Makefile
 ```bash
-# Setup development environment
-make setup-db
+# List available targets
+make help
 
-# Build and run server
+# Build the server binary
+make build
+
+# Build and run the server
 make run
 
 # Run tests
@@ -126,24 +98,9 @@ make test
 
 # Lint code
 make lint
-```
 
-### Docker Commands
-```bash
-# Build and start with Docker
-make docker-build
-make docker-up
-make docker-down
-make docker-clean
-
-# Access database directly
-make db-connect
-
-# Run database migrations
-make db-migrate
-
-# Seed sample data
-make db-seed
+# Delete the local SQLite database (recreated and seeded on next run)
+make db-reset
 ```
 
 ## 📁 Project Structure
@@ -159,13 +116,11 @@ recipe-app/
 │   │   ├── models/         # Data models
 │   │   ├── repositories/   # Database access layer
 │   │   └── storage/        # Database connections
-│   ├── migrations/         # Database migrations
 │   ├── web/              # Web templates and assets
 │   │   ├── static/         # CSS, JS, images
 │   │   └── templates/      # HTML templates
 │   ├── go.mod             # Go module definition
 │   └── Makefile          # Build and development commands
-├── docker-compose.yml        # Docker service definitions
 ├── DEVELPMENT_PLAN.md     # Detailed implementation plan
 └── README.md              # This file
 ```
@@ -173,14 +128,12 @@ recipe-app/
 ## 🔧 Configuration
 
 ### Environment Variables
-- `DATABASE_URL`: PostgreSQL connection string (optional, defaults to SQLite)
 - `JWT_SECRET`: Secret for JWT authentication (default: dev-secret)
 
 ### Database Configuration
-- Supports both PostgreSQL and SQLite
-- Automatic database schema creation
+- Uses **SQLite** (`recipeapp.db`, created automatically in `backend/`)
+- Automatic schema creation at startup
 - Seed data with sample recipes
-- Connection pooling and health checks
 
 ## 🧪 Testing
 
@@ -208,41 +161,37 @@ curl -X POST -H "Content-Type: application/json" \
 
 ### Common Issues and Solutions
 
-#### Database Connection Issues
-- **Error**: `failed to connect to database`
-- **Solution**: Check PostgreSQL is running and connection string is correct
-- **Fallback**: Use SQLite (automatic with no setup required)
+#### Database Issues
+- **Error**: `failed to open database` or schema errors
+- **Solution**: Ensure the process can write to the `backend/` directory. Delete
+  `recipeapp.db` (or run `make db-reset`) to recreate it from scratch.
 
 #### Server Already Running
 - **Error**: `bind: address already in use`
-- **Solution**: Kill existing process:
-  ```bash
-  pkill -f recipe-server
-  ```
+- **Solution**: Stop the existing process listening on `:8080`, then start again.
 
 #### Build Issues
 - **Error**: Module dependency issues
 - **Solution**: Run `go mod tidy` to fix dependencies
 
-#### Permission Issues
-- **Error**: Permission denied on database connection
-- **Solution**: Check database user permissions and PostgreSQL pg_hba.conf
+#### CGO / SQLite Build Errors
+- **Error**: `cgo: C compiler ... not found` or SQLite driver fails to build
+- **Solution**: Install a C compiler (e.g. `gcc`) and build with `CGO_ENABLED=1`
 
 ## 📚 Development Workflow
 
-1. **Setup**: Run `make setup-db` to initialize database
+1. **Setup**: Build the server with `make build` (the SQLite database is created automatically on first run)
 2. **Development**: Use `make run` for live development
 3. **Testing**: Run `make test` before committing changes
-4. **Database Management**: Use provided database commands for migrations and seeding
+4. **Database Management**: Use `make db-reset` to recreate the local SQLite database
 
 ## 🎯 Next Steps for Production
 
 1. Set up environment variables for production
-2. Configure database connection pooling
-3. Implement HTTPS and security headers
-4. Add comprehensive error logging
-5. Set up CI/CD pipeline
-6. Deploy with Docker Compose
+2. Implement HTTPS and security headers
+3. Add comprehensive error logging
+4. Set up CI/CD pipeline
+5. Deploy the compiled binary alongside its `recipeapp.db`
 
 ## 📞 Support
 

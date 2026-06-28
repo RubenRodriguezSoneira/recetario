@@ -26,7 +26,7 @@ backend/
     repositories/      # data access over database/sql — RecipeRepository, UserRepository
     services/          # business logic — CURRENTLY EMPTY (introduce only when justified)
     storage/           # storage helpers — CURRENTLY EMPTY
-  migrations/          # SQL schema files
+    database/          # embedded schema.sql + ApplySchema()
   web/                 # html/template files + static assets served by the Go process
 ```
 
@@ -78,8 +78,7 @@ via `authService.AuthMiddleware` / `OptionalAuthMiddleware`.
 - Errors wrapped with `%w`; `sql.ErrNoRows` translated to not-found.
 - Logging via `internal/logger`, request-scoped through `logger.FromContext`.
 - Tests are table-driven `*_test.go` beside the code, using `httptest` for handlers.
-- Persistence: SQLite for local dev (`main.go`), with `lib/pq` available for PostgreSQL.
-  Postgres SQL uses `$1` placeholders; the SQLite paths in `main.go` use `?`.
+- Persistence: SQLite (`main.go`); parameterized SQL uses `?` placeholders.
 
 ## Where Does New Code Go?
 
@@ -90,7 +89,7 @@ via `authService.AuthMiddleware` / `OptionalAuthMiddleware`.
 | A domain type or validation | `internal/models` |
 | Cross-cutting HTTP behavior | `internal/appmiddleware` |
 | Reusable business logic across handlers | `internal/services` (create the file when first needed) |
-| Schema change | `migrations/` (and `createTables` in `main.go` for local dev) |
+| Schema change | `internal/database/schema.sql` (applied via `createTables` in `main.go`) |
 
 ## Known Debt (respect, don't blindly copy)
 
@@ -98,5 +97,3 @@ via `authService.AuthMiddleware` / `OptionalAuthMiddleware`.
   New code should thread the real `context.Context` instead.
 - `CreateRecipe`/`UpdateRecipe` write child rows without a transaction. Prefer wrapping
   related writes in a transaction when you touch them.
-- The aspirational `agent.md` files mention GORM/PostgreSQL; the actual code uses raw
-  `database/sql`. Follow the `.github/` rules.

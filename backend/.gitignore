@@ -5,6 +5,9 @@ recipe-server.exe
 # Local SQLite databases (runtime artifacts)
 *.db
 
+# Uploaded files (runtime artifacts)
+uploads/
+
 # Test and coverage output
 *.out
 coverage.txt

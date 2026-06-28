@@ -9,7 +9,7 @@ full instructions win. Load this when you need the rules in context without the 
 - ✅ gofmt-clean; imports grouped stdlib / third-party / `recipe-app/...`.
 - ✅ Constructor injection (`NewXxx`), no global mutable state.
 - ✅ Handlers stay thin: parse → validate → repo/service → respond. No SQL in handlers.
-- ✅ Parameterized SQL only (`$1`/`?` + args). Never interpolate user input.
+- ✅ Parameterized SQL only (`?` placeholders + args). Never interpolate user input.
 - ✅ `defer rows.Close()` on every `Query`; check `rows.Err()` after the loop.
 - ✅ Translate `sql.ErrNoRows` into a domain not-found error.
 - ✅ Wrap errors with context and `%w`: `fmt.Errorf("failed to X: %w", err)`.

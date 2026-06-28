@@ -185,10 +185,10 @@ recipe_collections (recipe_id, collection_id)
 
 ### Backend (Go)
 - **Framework**: Chi router + standard library
-- **Database**: PostgreSQL with GORM ORM
+- **Database**: SQLite via `database/sql` (raw parameterized SQL, no ORM)
 - **Authentication**: JWT tokens with bcrypt password hashing
 - **API**: RESTful endpoints with JSON responses
-- **Search**: PostgreSQL full-text search + trigram indexes
+- **Search**: SQLite `LIKE`-based filtering
 - **File Storage**: Local filesystem with S3 compatibility
 - **Validation**: Go validator library
 - **Middleware**: CORS, logging, rate limiting, auth
@@ -225,7 +225,7 @@ recipe_collections (recipe_id, collection_id)
 ### Phase 1: Foundation (Weeks 1-2)
 - **Backend Setup**: Go project structure, database schema, basic models
 - **API Core**: User authentication, recipe CRUD endpoints
-- **Database**: PostgreSQL setup with migrations, seed data
+- **Database**: SQLite schema applied at startup, seed data
 - **Web Skeleton**: Basic HTMX setup, routing, authentication flow
 - **Testing**: Unit tests for models, integration tests for API
 
