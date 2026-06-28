@@ -8,17 +8,13 @@
 ## Tech Stack (as implemented)
 - **Language:** Go 1.25
 - **Router:** chi v5 (`github.com/go-chi/chi/v5`)
-- **Data access:** `database/sql` with raw, parameterized SQL — **no ORM** (no GORM)
-- **Drivers:** `mattn/go-sqlite3` (SQLite, used by `cmd/main.go` at runtime) and
-  `lib/pq` (PostgreSQL — available, not the default runtime)
+- **Data access:** `database/sql` with raw, parameterized SQL — **no ORM**
+- **Driver:** `mattn/go-sqlite3` (SQLite, used by `cmd/main.go` at runtime)
 - **Authentication:** JWT (`github.com/golang-jwt/jwt/v5`) + bcrypt
   (`golang.org/x/crypto/bcrypt`)
 - **Validation:** no third-party library — models expose `Validate() error` methods
 - **IDs:** UUIDs generated in Go (`github.com/google/uuid`) before INSERT
 - **Templates:** `html/template` + HTMX for server-rendered HTML
-
-> `DEVELOPMENT_PLAN.md` describes an aspirational GORM/PostgreSQL target. The list above
-> is what actually runs.
 
 ## Project Structure (actual)
 ```
@@ -33,7 +29,6 @@ backend/
     services/                  # currently empty: add only when logic outgrows a handler
     storage/                   # currently empty
   web/                         # html/template views + static assets (HTMX)
-  migrations/                  # PostgreSQL reference SQL (NOT used by the SQLite runtime)
 ```
 
 ## Architecture & Layering
@@ -73,7 +68,7 @@ backend/
 ## Database Practices
 - **Single schema source of truth:** `internal/database/schema.sql`, embedded with
   `go:embed` and applied at startup via `database.ApplySchema(db)`. There is no migration
-  tool in the runtime path; `backend/migrations/*.sql` is PostgreSQL reference only.
+  tool in the runtime path.
 - **Always parameterize:** use `?` placeholders (SQLite) and pass arguments separately.
   Never concatenate user input into SQL.
 - **No `RETURNING`, no `AutoMigrate`:** generate UUIDs in Go before INSERT.
@@ -83,7 +78,7 @@ backend/
   `*sql.Tx`.
 
 ## Search & Filtering
-- Text search uses SQLite **`LIKE`** (not PostgreSQL `ILIKE` or `tsvector`).
+- Text search uses SQLite **`LIKE`**.
 - Filter server-side with parameterized `WHERE` clauses (difficulty, cook time, ...).
 - Build dynamic queries by appending conditions and matching `?` arguments in textual
   order (UPDATEs bind SET args before WHERE args).

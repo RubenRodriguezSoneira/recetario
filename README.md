@@ -10,7 +10,6 @@ recipe-app/
 │   ├── cmd/         # Application entry points
 │   ├── internal/    # Private application code
 │   ├── pkg/         # Public library code
-│   ├── migrations/  # Database migrations (PostgreSQL reference schema)
 │   └── configs/     # Configuration files
 ├── web/             # HTMX frontend
 └── mobile/          # Android application
@@ -39,9 +38,6 @@ The backend uses **SQLite** and provisions itself automatically: on first run it
 creates `recipeapp.db` in the `backend/` directory, applies the schema
 (`internal/database/schema.sql`), and seeds sample data. No manual database setup
 is required.
-
-> The PostgreSQL schema in `migrations/001_initial_schema.sql` is kept as a
-> reference for a future server-side database and is not used at runtime.
 
 ## API Endpoints
 

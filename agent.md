@@ -12,7 +12,7 @@ JWT/bcrypt auth and `Validate()` methods on models. The root `web/` and `mobile/
 directories are placeholders. For code-accurate rules, **`.github/` is authoritative**
 (`.github/copilot-instructions.md`, `.github/instructions/go.instructions.md`); see
 `backend/agent.md` for the backend summary. `DEVELOPMENT_PLAN.md` is an aspirational
-roadmap (it describes a GORM/PostgreSQL target) and does not reflect the current code.
+roadmap and does not reflect the current code.
 
 ---
 
@@ -48,8 +48,7 @@ roadmap (it describes a GORM/PostgreSQL target) and does not reflect the current
 
 ### Database Operations
 - Apply schema changes through the single embedded schema
-  (`backend/internal/database/schema.sql`, applied via `ApplySchema`);
-  `backend/migrations/*.sql` is PostgreSQL reference only, not used at runtime
+  (`backend/internal/database/schema.sql`, applied via `ApplySchema`)
 - Never modify production data without explicit approval
 - Back up before destructive operations in development
 - Use transactions (`database/sql`) for multi-step data operations
