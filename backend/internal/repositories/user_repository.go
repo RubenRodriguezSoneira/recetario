@@ -52,7 +52,7 @@ func (r *UserRepository) CreateUser(user *models.User) error {
 // GetUserByID retrieves a user by ID
 func (r *UserRepository) GetUserByID(id string) (*models.User, error) {
 	query := `
-		SELECT id, email, username, first_name, last_name, password_hash, avatar_url, created_at, updated_at
+		SELECT id, email, username, first_name, last_name, password_hash, COALESCE(avatar_url, '') AS avatar_url, created_at, updated_at
 		FROM users
 		WHERE id = ?`
 
@@ -82,7 +82,7 @@ func (r *UserRepository) GetUserByID(id string) (*models.User, error) {
 // GetUserByEmail retrieves a user by email
 func (r *UserRepository) GetUserByEmail(email string) (*models.User, error) {
 	query := `
-		SELECT id, email, username, first_name, last_name, password_hash, avatar_url, created_at, updated_at
+		SELECT id, email, username, first_name, last_name, password_hash, COALESCE(avatar_url, '') AS avatar_url, created_at, updated_at
 		FROM users
 		WHERE email = ?`
 
@@ -112,7 +112,7 @@ func (r *UserRepository) GetUserByEmail(email string) (*models.User, error) {
 // GetUserByUsername retrieves a user by username
 func (r *UserRepository) GetUserByUsername(username string) (*models.User, error) {
 	query := `
-		SELECT id, email, username, first_name, last_name, password_hash, avatar_url, created_at, updated_at
+		SELECT id, email, username, first_name, last_name, password_hash, COALESCE(avatar_url, '') AS avatar_url, created_at, updated_at
 		FROM users
 		WHERE username = ?`
 
