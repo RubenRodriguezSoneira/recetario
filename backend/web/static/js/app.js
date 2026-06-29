@@ -2,23 +2,19 @@
 
 // Modal functions
 function showLoginModal() {
-    document.getElementById('loginModal').classList.remove('hidden');
-    document.getElementById('loginModal').classList.add('flex');
+    document.getElementById('loginModal').style.display = 'flex';
 }
 
 function hideLoginModal() {
-    document.getElementById('loginModal').classList.add('hidden');
-    document.getElementById('loginModal').classList.remove('flex');
+    document.getElementById('loginModal').style.display = 'none';
 }
 
 function showRegisterModal() {
-    document.getElementById('registerModal').classList.remove('hidden');
-    document.getElementById('registerModal').classList.add('flex');
+    document.getElementById('registerModal').style.display = 'flex';
 }
 
 function hideRegisterModal() {
-    document.getElementById('registerModal').classList.add('hidden');
-    document.getElementById('registerModal').classList.remove('flex');
+    document.getElementById('registerModal').style.display = 'none';
 }
 
 // Ingredient management for recipe form
@@ -27,22 +23,19 @@ let ingredientCount = 1;
 function addIngredient() {
     const ingredientsList = document.getElementById('ingredients-list');
     const newIngredient = document.createElement('div');
-    newIngredient.className = 'ingredient-item grid md:grid-cols-4 gap-4 mb-4';
+    newIngredient.className = 'ingredient-row';
     newIngredient.innerHTML = `
-        <input type="text" name="ingredients[${ingredientCount}].name" placeholder="Ingredient name" required
-               class="px-3 py-2 border rounded-lg focus:outline-none focus:border-blue-500">
-        <input type="text" name="ingredients[${ingredientCount}].quantity" placeholder="Quantity" required
-               class="px-3 py-2 border rounded-lg focus:outline-none focus:border-blue-500">
-        <input type="text" name="ingredients[${ingredientCount}].unit" placeholder="Unit" required
-               class="px-3 py-2 border rounded-lg focus:outline-none focus:border-blue-500">
-        <button type="button" onclick="removeIngredient(this)" class="bg-red-500 text-white px-3 py-2 rounded hover:bg-red-600">Remove</button>
+        <input type="text" name="ingredients[${ingredientCount}].name" placeholder="ej. Arroz" required class="form-input">
+        <input type="text" name="ingredients[${ingredientCount}].quantity" placeholder="400" required class="form-input">
+        <input type="text" name="ingredients[${ingredientCount}].unit" placeholder="g" required class="form-input">
+        <button type="button" onclick="removeIngredient(this)" class="btn-remove">✕</button>
     `;
     ingredientsList.appendChild(newIngredient);
     ingredientCount++;
 }
 
 function removeIngredient(button) {
-    const ingredientItem = button.closest('.ingredient-item');
+    const ingredientItem = button.closest('.ingredient-row');
     ingredientItem.remove();
 }
 
@@ -52,45 +45,35 @@ let instructionCount = 1;
 function addInstruction() {
     const instructionsList = document.getElementById('instructions-list');
     const newInstruction = document.createElement('div');
-    newInstruction.className = 'instruction-item mb-4';
+    newInstruction.className = 'instruction-row';
     newInstruction.innerHTML = `
-        <div class="flex gap-4">
-            <span class="font-semibold">${instructionCount + 1}.</span>
-            <textarea name="instructions[${instructionCount}]" placeholder="Step ${instructionCount + 1}" rows="2" required
-                      class="flex-1 px-3 py-2 border rounded-lg focus:outline-none focus:border-blue-500"></textarea>
-            <button type="button" onclick="removeInstruction(this)" class="bg-red-500 text-white px-3 py-2 rounded hover:bg-red-600">Remove</button>
-        </div>
+        <span class="step-label">${instructionCount + 1}.</span>
+        <textarea name="instructions[${instructionCount}]" placeholder="Paso ${instructionCount + 1}" rows="2" required class="form-textarea" style="flex:1;"></textarea>
+        <button type="button" onclick="removeInstruction(this)" class="btn-remove" style="align-self:flex-start; margin-top:0.4rem;">✕</button>
     `;
     instructionsList.appendChild(newInstruction);
     instructionCount++;
 }
 
 function removeInstruction(button) {
-    const instructionItem = button.closest('.instruction-item');
+    const instructionItem = button.closest('.instruction-row');
     instructionItem.remove();
     // Renumber remaining instructions
-    const instructions = document.querySelectorAll('.instruction-item');
+    const instructions = document.querySelectorAll('.instruction-row');
     instructions.forEach((item, index) => {
-        const span = item.querySelector('span');
+        const label = item.querySelector('.step-label');
         const textarea = item.querySelector('textarea');
-        span.textContent = `${index + 1}.`;
-        textarea.placeholder = `Step ${index + 1}`;
+        if (label) label.textContent = `${index + 1}.`;
+        if (textarea) textarea.placeholder = `Paso ${index + 1}`;
     });
     instructionCount = instructions.length;
 }
 
 // Mobile menu toggle
 function toggleMobileMenu() {
-    const mobileMenu = document.querySelector('.mobile-menu');
-    if (mobileMenu) {
-        mobileMenu.classList.toggle('active');
-    } else {
-        // Create mobile menu if it doesn't exist
-        const nav = document.querySelector('nav.hidden.md\\:flex');
-        const mobileMenuCopy = nav.cloneNode(true);
-        mobileMenuCopy.classList.remove('hidden', 'md:flex');
-        mobileMenuCopy.classList.add('mobile-menu', 'fixed', 'top-16', 'left-0', 'w-full', 'bg-white', 'shadow-lg', 'flex-col', 'p-4', 'z-40');
-        document.querySelector('header').appendChild(mobileMenuCopy);
+    const nav = document.querySelector('.site-nav');
+    if (nav) {
+        nav.classList.toggle('open');
     }
 }
 

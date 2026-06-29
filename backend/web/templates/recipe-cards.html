@@ -1,22 +1,22 @@
 {{range .recipes}}
-<div class="bg-white rounded-lg shadow-md overflow-hidden hover:shadow-lg transition fade-me-in">
-    <div class="h-48 bg-gray-200 flex items-center justify-center">
-        <span class="text-4xl">🍲</span>
+<div class="recipe-card fade-in">
+    <div class="recipe-card-thumb">
+        🍲
     </div>
-    <div class="p-6">
-        <h3 class="text-xl font-semibold mb-2">{{.title}}</h3>
-        <p class="text-gray-600 mb-4 line-clamp-2">{{.description}}</p>
-        <div class="flex items-center justify-between text-sm text-gray-500">
-            <span>⏱️ {{.cook_time}}min</span>
-            <span class="px-2 py-1 bg-blue-100 text-blue-800 rounded">{{.difficulty}}</span>
+    <div class="recipe-card-body">
+        <h3 class="recipe-card-title">{{.title}}</h3>
+        <p class="recipe-card-desc">{{.description}}</p>
+        <div class="recipe-card-meta">
+            <span class="meta-chip">⏱ {{.cook_time}} min</span>
+            <span class="difficulty-badge {{.difficulty}}">{{.difficulty}}</span>
         </div>
-        <div class="mt-4">
-            <a href="/recipes/{{.id}}" class="text-blue-600 hover:text-blue-800 font-medium">View Recipe →</a>
-        </div>
+        <a href="/recipes/{{.id}}" class="recipe-card-link">Ver receta →</a>
     </div>
 </div>
 {{else}}
-<div class="col-span-full text-center py-8 text-gray-500">
-    <p>No recipes found. <a href="/recipes/new" class="text-blue-600 hover:text-blue-800">Create your first recipe!</a></p>
+<div class="empty-state" style="grid-column: 1/-1;">
+    <span class="empty-icon">🍽️</span>
+    <p>Aún no hay recetas guardadas.</p>
+    <a href="/recipes/new" class="btn-primary">Crear la primera receta</a>
 </div>
 {{end}}

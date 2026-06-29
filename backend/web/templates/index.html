@@ -1,41 +1,60 @@
 {{define "content"}}
-<div class="text-center py-16">
-    <h1 class="text-4xl font-bold text-gray-900 mb-4">Welcome to RecipeApp 🍲</h1>
-    <p class="text-xl text-gray-600 mb-8">Discover, create, and share amazing recipes</p>
-    
-    <div class="grid md:grid-cols-3 gap-8 mt-16">
-        <div class="bg-white p-6 rounded-lg shadow-md">
-            <div class="text-3xl mb-4">📖</div>
-            <h3 class="text-xl font-semibold mb-2">Browse Recipes</h3>
-            <p class="text-gray-600">Explore our collection of delicious recipes from around the world</p>
-            <a href="/recipes" class="inline-block mt-4 text-blue-600 hover:text-blue-800">View Recipes →</a>
-        </div>
-        
-        <div class="bg-white p-6 rounded-lg shadow-md">
-            <div class="text-3xl mb-4">✨</div>
-            <h3 class="text-xl font-semibold mb-2">Create Recipes</h3>
-            <p class="text-gray-600">Share your own culinary creations with the community</p>
-            {{if .User}}
-                <a href="/recipes/new" class="inline-block mt-4 text-blue-600 hover:text-blue-800">Create Recipe →</a>
-            {{else}}
-                <button onclick="showLoginModal()" class="inline-block mt-4 text-blue-600 hover:text-blue-800">Login to Create →</button>
-            {{end}}
-        </div>
-        
-        <div class="bg-white p-6 rounded-lg shadow-md">
-            <div class="text-3xl mb-4">🔍</div>
-            <h3 class="text-xl font-semibold mb-2">Search & Filter</h3>
-            <p class="text-gray-600">Find the perfect recipe with our advanced search features</p>
-            <a href="/recipes" class="inline-block mt-4 text-blue-600 hover:text-blue-800">Start Searching →</a>
-        </div>
+<!-- Hero -->
+<div style="margin: -2.5rem -1.5rem 0; padding: 5rem 1.5rem 4rem; background: linear-gradient(135deg, #F2EBE0 0%, #EDE3D4 100%); border-bottom: 2px solid #DDD3C4; text-align: center; position: relative; overflow: hidden;">
+    <div style="position:absolute;inset:0;background:radial-gradient(circle at 15% 85%, rgba(200,129,58,0.08),transparent 50%),radial-gradient(circle at 85% 15%, rgba(107,124,94,0.08),transparent 50%);pointer-events:none;"></div>
+    <p class="hero-eyebrow">Tu recetario personal</p>
+    <h1 class="hero-title">Cocina con <em>alma,</em><br>guarda con orden</h1>
+    <p class="hero-sub">Todas tus recetas favoritas en un solo lugar. Fácil de buscar, fácil de seguir.</p>
+    <div class="hero-actions">
+        <a href="/recipes" class="btn-primary" style="padding: 0.75rem 2rem; font-size: 1rem;">Ver recetas</a>
+        {{if .User}}
+            <a href="/recipes/new" class="btn-secondary" style="padding: 0.75rem 2rem; font-size: 1rem;">Añadir receta</a>
+        {{else}}
+            <button onclick="showRegisterModal()" class="btn-secondary" style="padding: 0.75rem 2rem; font-size: 1rem;">Empezar gratis</button>
+        {{end}}
     </div>
 </div>
 
-<!-- Recent Recipes Section -->
-<div class="mt-16">
-    <h2 class="text-2xl font-bold text-gray-900 mb-6">Recent Recipes</h2>
-    <div id="recent-recipes" hx-get="/api/recipes?limit=6" hx-trigger="load" class="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-        <div class="text-center py-8 text-gray-500">Loading recent recipes...</div>
+<!-- Feature Cards -->
+<div class="features-grid" style="margin-top: 3rem;">
+    <div class="feature-card">
+        <span class="feature-icon">📖</span>
+        <h3>Explora recetas</h3>
+        <p>Navega por toda tu colección y descubre qué cocinar hoy.</p>
+        <a href="/recipes" class="feature-link">Ver colección →</a>
+    </div>
+    <div class="feature-card">
+        <span class="feature-icon">✍️</span>
+        <h3>Añade las tuyas</h3>
+        <p>Guarda tus creaciones con ingredientes y pasos detallados.</p>
+        {{if .User}}
+            <a href="/recipes/new" class="feature-link">Crear receta →</a>
+        {{else}}
+            <button onclick="showLoginModal()" class="feature-link" style="background:none;border:none;cursor:pointer;font-family:inherit;font-size:inherit;padding:0;">Acceder →</button>
+        {{end}}
+    </div>
+    <div class="feature-card">
+        <span class="feature-icon">🔍</span>
+        <h3>Busca y filtra</h3>
+        <p>Encuentra la receta perfecta por tiempo, dificultad o ingredientes.</p>
+        <a href="/recipes" class="feature-link">Buscar →</a>
+    </div>
+</div>
+
+<!-- Recent Recipes -->
+<div style="margin-top: 1rem;">
+    <div class="section-header">
+        <h2 class="section-title">Recetas recientes</h2>
+        <a href="/recipes" style="font-size:0.85rem; font-weight:700; color: var(--amber); text-transform:uppercase; letter-spacing:0.05em;">Ver todas →</a>
+    </div>
+    <div id="recent-recipes"
+         hx-get="/api/recipes?limit=6"
+         hx-trigger="load"
+         class="recipe-grid">
+        <div style="grid-column: 1/-1; text-align:center; padding: 3rem; color: var(--ink-light);">
+            <div class="spinner" style="margin: 0 auto 1rem;"></div>
+            Cargando recetas...
+        </div>
     </div>
 </div>
 {{end}}

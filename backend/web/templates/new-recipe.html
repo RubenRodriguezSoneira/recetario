@@ -1,98 +1,97 @@
 {{define "content"}}
-<div class="max-w-4xl mx-auto">
-    <div class="flex justify-between items-center mb-6">
-        <h1 class="text-3xl font-bold text-gray-900">Create New Recipe</h1>
-        <a href="/recipes" class="text-gray-600 hover:text-gray-800">← Back to Recipes</a>
+<div style="max-width: 860px; margin: 0 auto;">
+    <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:2rem;">
+        <h1 style="font-family:'Playfair Display',serif; font-size:2rem;">Nueva receta</h1>
+        <a href="/recipes" class="btn-secondary">← Volver</a>
     </div>
-    
+
     <form hx-post="/api/recipes" hx-encoding="json" hx-target="#form-message" hx-swap="innerHTML">
-        <div id="form-message" class="mb-4"></div>
-        
-        <!-- Basic Information -->
-        <div class="bg-white p-6 rounded-lg shadow-md mb-6">
-            <h2 class="text-xl font-semibold mb-4">Basic Information</h2>
-            
-            <div class="mb-4">
-                <label class="block text-gray-700 text-sm font-bold mb-2" for="title">Recipe Title</label>
-                <input type="text" id="title" name="title" required 
-                       class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:border-blue-500">
+        <div id="form-message" style="margin-bottom:1rem;"></div>
+
+        <!-- Basic Info -->
+        <div class="form-panel">
+            <h2>Información básica</h2>
+
+            <div class="form-group">
+                <label class="form-label" for="title">Nombre de la receta</label>
+                <input type="text" id="title" name="title" required
+                       placeholder="ej. Paella valenciana"
+                       class="form-input">
             </div>
-            
-            <div class="mb-4">
-                <label class="block text-gray-700 text-sm font-bold mb-2" for="description">Description</label>
+
+            <div class="form-group">
+                <label class="form-label" for="description">Descripción</label>
                 <textarea id="description" name="description" rows="3" required
-                          class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:border-blue-500"></textarea>
+                          placeholder="Describe brevemente tu receta…"
+                          class="form-textarea"></textarea>
             </div>
-            
-            <div class="grid md:grid-cols-3 gap-4">
-                <div class="mb-4">
-                    <label class="block text-gray-700 text-sm font-bold mb-2" for="prep_time">Prep Time (min)</label>
+
+            <div style="display:grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap:1rem;">
+                <div class="form-group">
+                    <label class="form-label" for="prep_time">Prep (min)</label>
                     <input type="number" id="prep_time" name="prep_time" min="0" required
-                           class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:border-blue-500">
+                           placeholder="15" class="form-input">
                 </div>
-                
-                <div class="mb-4">
-                    <label class="block text-gray-700 text-sm font-bold mb-2" for="cook_time">Cook Time (min)</label>
+                <div class="form-group">
+                    <label class="form-label" for="cook_time">Cocción (min)</label>
                     <input type="number" id="cook_time" name="cook_time" min="0" required
-                           class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:border-blue-500">
+                           placeholder="30" class="form-input">
                 </div>
-                
-                <div class="mb-4">
-                    <label class="block text-gray-700 text-sm font-bold mb-2" for="servings">Servings</label>
+                <div class="form-group">
+                    <label class="form-label" for="servings">Raciones</label>
                     <input type="number" id="servings" name="servings" min="1" required
-                           class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:border-blue-500">
+                           placeholder="4" class="form-input">
+                </div>
+                <div class="form-group">
+                    <label class="form-label" for="difficulty">Dificultad</label>
+                    <select id="difficulty" name="difficulty" required class="form-input" style="appearance:auto;">
+                        <option value="">—</option>
+                        <option value="easy">Fácil</option>
+                        <option value="medium">Media</option>
+                        <option value="hard">Difícil</option>
+                    </select>
                 </div>
             </div>
-            
-            <div class="mb-4">
-                <label class="block text-gray-700 text-sm font-bold mb-2" for="difficulty">Difficulty</label>
-                <select id="difficulty" name="difficulty" required
-                        class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:border-blue-500">
-                    <option value="">Select Difficulty</option>
-                    <option value="easy">Easy</option>
-                    <option value="medium">Medium</option>
-                    <option value="hard">Hard</option>
-                </select>
-            </div>
         </div>
-        
+
         <!-- Ingredients -->
-        <div class="bg-white p-6 rounded-lg shadow-md mb-6">
-            <h2 class="text-xl font-semibold mb-4">Ingredients</h2>
+        <div class="form-panel">
+            <h2>Ingredientes</h2>
+            <div style="display:grid; grid-template-columns: 2fr 1fr 1fr auto; gap:0.5rem; margin-bottom:0.5rem;">
+                <span class="form-label" style="margin:0;">Ingrediente</span>
+                <span class="form-label" style="margin:0;">Cantidad</span>
+                <span class="form-label" style="margin:0;">Unidad</span>
+                <span></span>
+            </div>
             <div id="ingredients-list">
-                <div class="ingredient-item grid md:grid-cols-4 gap-4 mb-4">
-                    <input type="text" name="ingredients[0].name" placeholder="Ingredient name" required
-                           class="px-3 py-2 border rounded-lg focus:outline-none focus:border-blue-500">
-                    <input type="text" name="ingredients[0].quantity" placeholder="Quantity" required
-                           class="px-3 py-2 border rounded-lg focus:outline-none focus:border-blue-500">
-                    <input type="text" name="ingredients[0].unit" placeholder="Unit" required
-                           class="px-3 py-2 border rounded-lg focus:outline-none focus:border-blue-500">
-                    <button type="button" onclick="removeIngredient(this)" class="bg-red-500 text-white px-3 py-2 rounded hover:bg-red-600">Remove</button>
+                <div class="ingredient-row">
+                    <input type="text" name="ingredients[0].name" placeholder="ej. Arroz" required class="form-input">
+                    <input type="text" name="ingredients[0].quantity" placeholder="400" required class="form-input">
+                    <input type="text" name="ingredients[0].unit" placeholder="g" required class="form-input">
+                    <button type="button" onclick="removeIngredient(this)" class="btn-remove">✕</button>
                 </div>
             </div>
-            <button type="button" onclick="addIngredient()" class="bg-green-500 text-white px-4 py-2 rounded hover:bg-green-600">+ Add Ingredient</button>
+            <button type="button" onclick="addIngredient()" class="btn-add" style="margin-top:0.75rem;">+ Añadir ingrediente</button>
         </div>
-        
+
         <!-- Instructions -->
-        <div class="bg-white p-6 rounded-lg shadow-md mb-6">
-            <h2 class="text-xl font-semibold mb-4">Instructions</h2>
+        <div class="form-panel">
+            <h2>Pasos de preparación</h2>
             <div id="instructions-list">
-                <div class="instruction-item mb-4">
-                    <div class="flex gap-4">
-                        <span class="font-semibold">1.</span>
-                        <textarea name="instructions[0]" placeholder="Step 1" rows="2" required
-                                  class="flex-1 px-3 py-2 border rounded-lg focus:outline-none focus:border-blue-500"></textarea>
-                        <button type="button" onclick="removeInstruction(this)" class="bg-red-500 text-white px-3 py-2 rounded hover:bg-red-600">Remove</button>
-                    </div>
+                <div class="instruction-row">
+                    <span class="step-label">1.</span>
+                    <textarea name="instructions[0]" placeholder="Describe el primer paso…" rows="2" required
+                              class="form-textarea" style="flex:1;"></textarea>
+                    <button type="button" onclick="removeInstruction(this)" class="btn-remove" style="align-self:flex-start; margin-top:0.4rem;">✕</button>
                 </div>
             </div>
-            <button type="button" onclick="addInstruction()" class="bg-green-500 text-white px-4 py-2 rounded hover:bg-green-600">+ Add Step</button>
+            <button type="button" onclick="addInstruction()" class="btn-add" style="margin-top:0.75rem;">+ Añadir paso</button>
         </div>
-        
-        <!-- Submit Buttons -->
-        <div class="flex justify-end gap-4">
-            <a href="/recipes" class="bg-gray-300 text-gray-700 px-6 py-2 rounded-lg hover:bg-gray-400 transition">Cancel</a>
-            <button type="submit" class="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition">Create Recipe</button>
+
+        <!-- Submit -->
+        <div style="display:flex; justify-content:flex-end; gap:1rem;">
+            <a href="/recipes" class="btn-secondary" style="padding:0.7rem 1.5rem;">Cancelar</a>
+            <button type="submit" class="btn-primary" style="padding:0.7rem 1.75rem; font-size:1rem;">Guardar receta</button>
         </div>
     </form>
 </div>

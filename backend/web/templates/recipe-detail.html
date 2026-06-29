@@ -1,8 +1,11 @@
 {{define "content"}}
-<div id="recipe-detail" hx-get="/api/recipes/{{.RecipeID}}" hx-trigger="load" class="max-w-4xl mx-auto">
-    <div class="text-center py-8 text-gray-500">
-        <div class="spinner mx-auto mb-4"></div>
-        Loading recipe...
+<div id="recipe-content"
+     hx-get="/api/recipes/{{.ID}}"
+     hx-trigger="load"
+     class="max-w-4xl mx-auto">
+    <div style="text-align:center; padding:3rem; color:var(--ink-light);">
+        <div class="spinner" style="margin: 0 auto 1rem;"></div>
+        Cargando receta…
     </div>
 </div>
 {{end}}

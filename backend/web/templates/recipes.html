@@ -1,76 +1,71 @@
 {{define "content"}}
-<div class="flex flex-col lg:flex-row gap-8">
-    <!-- Sidebar Filters -->
-    <div class="lg:w-1/4">
-        <div class="bg-white p-6 rounded-lg shadow-md">
-            <h3 class="text-lg font-semibold mb-4">Filters</h3>
-            
-            <div class="mb-6">
-                <label class="block text-sm font-medium text-gray-700 mb-2">Search</label>
-                <input type="text" id="searchInput" placeholder="Search recipes..." 
-                       hx-get="/api/recipes" hx-trigger="keyup changed delay:500ms"
-                       hx-target="#recipe-grid" hx-include="[name='cook_time'], [name='difficulty']"
-                       class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:border-blue-500">
+<div style="display: flex; gap: 2rem; align-items: flex-start;">
+    <!-- Sidebar -->
+    <aside style="width: 260px; flex-shrink: 0;">
+        <div class="filter-panel">
+            <h3>Filtros</h3>
+
+            <div class="filter-group">
+                <label class="filter-label">Buscar</label>
+                <input type="text" id="searchInput" name="q"
+                       placeholder="Nombre de la receta…"
+                       hx-get="/api/recipes"
+                       hx-trigger="keyup changed delay:400ms"
+                       hx-target="#recipe-grid"
+                       hx-include="[name='cook_time'], [name='difficulty']"
+                       class="input-field">
             </div>
-            
-            <div class="mb-6">
-                <label class="block text-sm font-medium text-gray-700 mb-2">Cook Time</label>
-                <select name="cook_time" hx-get="/api/recipes" hx-trigger="change"
-                        hx-target="#recipe-grid" hx-include="#searchInput, [name='difficulty']"
-                        class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:border-blue-500">
-                    <option value="">Any Time</option>
-                    <option value="30">Under 30 min</option>
-                    <option value="60">Under 1 hour</option>
-                    <option value="120">Under 2 hours</option>
+
+            <div class="filter-group">
+                <label class="filter-label">Tiempo de cocción</label>
+                <select name="cook_time"
+                        hx-get="/api/recipes"
+                        hx-trigger="change"
+                        hx-target="#recipe-grid"
+                        hx-include="#searchInput, [name='difficulty']"
+                        class="select-field">
+                    <option value="">Cualquiera</option>
+                    <option value="30">Menos de 30 min</option>
+                    <option value="60">Menos de 1 hora</option>
+                    <option value="120">Menos de 2 horas</option>
                 </select>
             </div>
-            
-            <div class="mb-6">
-                <label class="block text-sm font-medium text-gray-700 mb-2">Difficulty</label>
-                <select name="difficulty" hx-get="/api/recipes" hx-trigger="change"
-                        hx-target="#recipe-grid" hx-include="#searchInput, [name='cook_time']"
-                        class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:border-blue-500">
-                    <option value="">Any Difficulty</option>
-                    <option value="easy">Easy</option>
-                    <option value="medium">Medium</option>
-                    <option value="hard">Hard</option>
+
+            <div class="filter-group">
+                <label class="filter-label">Dificultad</label>
+                <select name="difficulty"
+                        hx-get="/api/recipes"
+                        hx-trigger="change"
+                        hx-target="#recipe-grid"
+                        hx-include="#searchInput, [name='cook_time']"
+                        class="select-field">
+                    <option value="">Cualquiera</option>
+                    <option value="easy">Fácil</option>
+                    <option value="medium">Media</option>
+                    <option value="hard">Difícil</option>
                 </select>
             </div>
         </div>
-    </div>
-    
-    <!-- Recipe Grid -->
-    <div class="lg:w-3/4">
-        <div class="flex justify-between items-center mb-6">
-            <h1 class="text-3xl font-bold text-gray-900">All Recipes</h1>
+    </aside>
+
+    <!-- Main content -->
+    <div style="flex: 1; min-width: 0;">
+        <div class="section-header">
+            <h1 class="section-title">Todas las recetas</h1>
             {{if .User}}
-                <a href="/recipes/new" class="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition">+ New Recipe</a>
+                <a href="/recipes/new" class="btn-primary">+ Nueva receta</a>
             {{end}}
         </div>
-        
-        <div id="recipe-grid" hx-get="/api/recipes" hx-trigger="load" class="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-            <div class="text-center py-8 text-gray-500">Loading recipes...</div>
+
+        <div id="recipe-grid"
+             hx-get="/api/recipes"
+             hx-trigger="load"
+             class="recipe-grid">
+            <div style="grid-column:1/-1; text-align:center; padding:3rem; color: var(--ink-light);">
+                <div class="spinner" style="margin: 0 auto 1rem;"></div>
+                Cargando recetas…
+            </div>
         </div>
     </div>
 </div>
-
-<!-- Recipe Card Template (for HTMX responses) -->
-<template id="recipe-card-template">
-    <div class="bg-white rounded-lg shadow-md overflow-hidden hover:shadow-lg transition">
-        <div class="h-48 bg-gray-200 flex items-center justify-center">
-            <span class="text-4xl">🍲</span>
-        </div>
-        <div class="p-6">
-            <h3 class="text-xl font-semibold mb-2">{{title}}</h3>
-            <p class="text-gray-600 mb-4 line-clamp-2">{{description}}</p>
-            <div class="flex items-center justify-between text-sm text-gray-500">
-                <span>⏱️ {{cook_time}}min</span>
-                <span class="px-2 py-1 bg-blue-100 text-blue-800 rounded">{{difficulty}}</span>
-            </div>
-            <div class="mt-4">
-                <a href="/recipes/{{id}}" class="text-blue-600 hover:text-blue-800 font-medium">View Recipe →</a>
-            </div>
-        </div>
-    </div>
-</template>
 {{end}}
