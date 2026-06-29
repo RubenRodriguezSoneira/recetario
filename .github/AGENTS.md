@@ -22,7 +22,8 @@ AI agent and skill definitions for this repository, adapted to the Go stack
     ├── go-feature/                 # generate new Go code following project patterns
     ├── go-testing/                 # write table-driven + httptest tests
     ├── project-structure/          # architecture & "where does code go" reference
-    └── git-commit/                 # Conventional Commits workflow
+    ├── git-commit/                 # Conventional Commits workflow
+    └── plan-to-issues/             # split a plan into an epic + sub-issues (deps + Mermaid)
 ```
 
 ## Agents
@@ -41,6 +42,7 @@ AI agent and skill definitions for this repository, adapted to the Go stack
 | `go-testing` | Write or improve table-driven tests using `net/http/httptest`. |
 | `project-structure` | Authoritative map of packages, layering, request lifecycle, and where new code belongs. |
 | `git-commit` | Create well-formed Conventional Commits. |
+| `plan-to-issues` | Split an approved plan into a tracking epic + sub-issues with task-list links, a Mermaid dependency graph, epic assignment, and native blocked-by relationships via the GitHub API. |
 
 ## How It Fits Together
 
