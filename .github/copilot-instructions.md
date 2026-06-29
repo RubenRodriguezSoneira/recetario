@@ -35,9 +35,9 @@ agent and skill in this repository. Language-specific rules live in
   exist but are currently empty; introduce a service layer only when business logic grows
   beyond a handler, and keep it consistent across the codebase.
 
-> The repository-level [`agent.md`](../agent.md) and [`backend/agent.md`](../backend/agent.md)
-> are higher-level summaries. The rules in `.github/` describe the code **as it exists
-> today**. When they conflict, follow `.github/`.
+> The [`backend/agent.md`](../backend/agent.md) summary is a higher-level overview. The
+> rules in `.github/` describe the code **as it exists today**. When they conflict, follow
+> `.github/`.
 
 ## Safety & Security (never violate)
 

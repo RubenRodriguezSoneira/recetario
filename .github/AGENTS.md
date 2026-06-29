@@ -55,7 +55,7 @@ AI agent and skill definitions for this repository, adapted to the Go stack
 
 ## Conventions
 
-- The rules describe the codebase **as it exists today**. Where the `agent.md` /
-  `backend/agent.md` summaries conflict with `.github/`, follow `.github/`.
+- The rules describe the codebase **as it exists today**. Where the `backend/agent.md`
+  summary conflicts with `.github/`, follow `.github/`.
 - Run Go commands from `backend/`. Every change ends with green `go build ./...` and
   `go test ./...`.
