@@ -58,6 +58,7 @@ func main() {
 
 	r.Use(chiMiddleware.RequestID)
 	r.Use(chiMiddleware.Recoverer)
+	r.Use(appmiddleware.CanonicalLoopbackHost)
 	r.Use(appmiddleware.RequestLogger)
 	r.Use(appmiddleware.ErrorHandler)
 	r.Use(appmiddleware.CORS(appmiddleware.DefaultCORSConfig()))

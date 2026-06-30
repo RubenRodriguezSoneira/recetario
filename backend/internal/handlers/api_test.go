@@ -120,6 +120,7 @@ func TestAPIHandler_GetRecipes(t *testing.T) {
 	tests := []struct {
 		name           string
 		method         string
+		userID         string
 		expectedStatus int
 		expectedBody   []map[string]interface{}
 	}{
@@ -128,12 +129,26 @@ func TestAPIHandler_GetRecipes(t *testing.T) {
 			method:         http.MethodGet,
 			expectedStatus: http.StatusOK,
 			expectedBody: []map[string]interface{}{
-				{"id": "1", "title": "Spaghetti Bolognese"},
-				{"id": "2", "title": "Chicken Curry"},
-				{"id": "3", "title": "Caesar Salad"},
-				{"id": "4", "title": "Beef Tacos"},
-				{"id": "5", "title": "Chocolate Cake"},
-				{"id": "6", "title": "Greek Salad"},
+				{"id": "1", "title": "Spaghetti Bolognese", "is_owner": false},
+				{"id": "2", "title": "Chicken Curry", "is_owner": false},
+				{"id": "3", "title": "Caesar Salad", "is_owner": false},
+				{"id": "4", "title": "Beef Tacos", "is_owner": false},
+				{"id": "5", "title": "Chocolate Cake", "is_owner": false},
+				{"id": "6", "title": "Greek Salad", "is_owner": false},
+			},
+		},
+		{
+			name:           "GET recipes marks owner when authenticated",
+			method:         http.MethodGet,
+			userID:         testOwner,
+			expectedStatus: http.StatusOK,
+			expectedBody: []map[string]interface{}{
+				{"id": "1", "title": "Spaghetti Bolognese", "is_owner": true},
+				{"id": "2", "title": "Chicken Curry", "is_owner": true},
+				{"id": "3", "title": "Caesar Salad", "is_owner": true},
+				{"id": "4", "title": "Beef Tacos", "is_owner": true},
+				{"id": "5", "title": "Chocolate Cake", "is_owner": true},
+				{"id": "6", "title": "Greek Salad", "is_owner": true},
 			},
 		},
 		{
@@ -152,6 +167,9 @@ func TestAPIHandler_GetRecipes(t *testing.T) {
 				body = strings.NewReader("")
 			}
 			req := httptest.NewRequest(tt.method, "/api/recipes", body)
+			if tt.userID != "" {
+				req = req.WithContext(context.WithValue(req.Context(), appmiddleware.UserIDKey, tt.userID))
+			}
 			w := httptest.NewRecorder()
 
 			handler.HandleRecipes(w, req)
@@ -177,9 +195,63 @@ func TestAPIHandler_GetRecipes(t *testing.T) {
 					if response[i]["title"] != expected["title"] {
 						t.Errorf("Expected recipe title %s, got %s", expected["title"], response[i]["title"])
 					}
+					if response[i]["is_owner"] != expected["is_owner"] {
+						t.Errorf("Expected is_owner %v, got %v", expected["is_owner"], response[i]["is_owner"])
+					}
 				}
 			}
 		})
+	}
+}
+
+func TestAPIHandler_GetRecipes_HTMX_OwnerShowsEditAndDeleteInCards(t *testing.T) {
+	handler := NewAPIHandler(newTestStore())
+	handler.templates = mustLoadDetailTemplate(t)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/recipes", nil)
+	req = req.WithContext(context.WithValue(req.Context(), appmiddleware.UserIDKey, testOwner))
+	req.Header.Set("HX-Request", "true")
+	w := httptest.NewRecorder()
+
+	handler.HandleRecipes(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", w.Code)
+	}
+	if got := w.Header().Get("Content-Type"); !strings.HasPrefix(got, "text/html") {
+		t.Fatalf("expected text/html content type, got %q", got)
+	}
+
+	body := w.Body.String()
+	if !strings.Contains(body, "Ver receta") {
+		t.Fatalf("expected cards body to include recipe link, got: %s", body)
+	}
+	if !strings.Contains(body, "/recipes/1/edit") || !strings.Contains(body, "deleteRecipe('1', this)") {
+		t.Fatalf("expected owner edit/delete controls in cards, got: %s", body)
+	}
+}
+
+func TestAPIHandler_GetRecipes_HTMX_AuthenticatedNonOwnerHidesEditAndDeleteInCards(t *testing.T) {
+	handler := NewAPIHandler(newTestStore())
+	handler.templates = mustLoadDetailTemplate(t)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/recipes", nil)
+	req = req.WithContext(context.WithValue(req.Context(), appmiddleware.UserIDKey, "intruder"))
+	req.Header.Set("HX-Request", "true")
+	w := httptest.NewRecorder()
+
+	handler.HandleRecipes(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", w.Code)
+	}
+
+	body := w.Body.String()
+	if !strings.Contains(body, "Ver receta") {
+		t.Fatalf("expected cards body to include recipe link, got: %s", body)
+	}
+	if strings.Contains(body, "/edit") || strings.Contains(body, "deleteRecipe(") {
+		t.Fatalf("expected owner edit/delete controls hidden in cards for non-owner, got: %s", body)
 	}
 }
 

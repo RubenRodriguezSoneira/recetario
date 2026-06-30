@@ -399,7 +399,37 @@ function setupEditRecipeForm() {
     loadRecipe();
 }
 
-async function deleteRecipe(recipeID) {
+function refreshRecipeGrid() {
+    const grid = document.getElementById('recipe-grid');
+    if (!grid) return;
+
+    const query = {
+        q: document.getElementById('searchInput')?.value || '',
+        cook_time: document.querySelector('[name="cook_time"]')?.value || '',
+        difficulty: document.querySelector('[name="difficulty"]')?.value || ''
+    };
+
+    if (window.htmx) {
+        window.htmx.ajax('GET', '/api/recipes', {
+            target: '#recipe-grid',
+            swap: 'innerHTML',
+            values: query
+        });
+        return;
+    }
+
+    const params = new URLSearchParams(query);
+    fetch(`/api/recipes?${params.toString()}`, { credentials: 'include' })
+        .then((response) => response.text())
+        .then((html) => {
+            grid.innerHTML = html;
+        })
+        .catch(() => {
+            showFlashMessage('No se pudo refrescar el listado', 'error');
+        });
+}
+
+async function deleteRecipe(recipeID, sourceElement = null) {
     if (!window.confirm('¿Seguro que quieres eliminar esta receta?')) {
         return;
     }
@@ -410,7 +440,24 @@ async function deleteRecipe(recipeID) {
     });
 
     if (response.status === 204) {
-        window.location.href = '/recipes';
+        const card = sourceElement?.closest('.recipe-card');
+        const isInRecipeGrid = !!sourceElement?.closest('#recipe-grid');
+
+        if (card && isInRecipeGrid) {
+            card.remove();
+            showFlashMessage('Receta eliminada correctamente', 'success');
+
+            const remainingCards = document.querySelectorAll('#recipe-grid .recipe-card');
+            if (remainingCards.length === 0) {
+                refreshRecipeGrid();
+            }
+            return;
+        }
+
+        showFlashMessage('Receta eliminada correctamente', 'success');
+        window.setTimeout(() => {
+            window.location.href = '/recipes';
+        }, 200);
         return;
     }
 

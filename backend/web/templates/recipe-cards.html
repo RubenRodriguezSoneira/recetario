@@ -10,7 +10,13 @@
             <span class="meta-chip">⏱ {{.cook_time}} min</span>
             <span class="difficulty-badge {{.difficulty}}">{{.difficulty}}</span>
         </div>
-        <a href="/recipes/{{.id}}" class="recipe-card-link">Ver receta →</a>
+        <div style="display:flex; align-items:center; gap:0.65rem; flex-wrap:wrap;">
+            <a href="/recipes/{{.id}}" class="recipe-card-link">Ver receta →</a>
+            {{if .is_owner}}
+            <a href="/recipes/{{.id}}/edit" class="btn-secondary" style="padding:0.35rem 0.7rem; margin-left:auto;">✏️ Editar</a>
+            <button class="btn-danger" onclick="deleteRecipe('{{.id}}', this)" style="padding:0.35rem 0.7rem;">Eliminar</button>
+            {{end}}
+        </div>
     </div>
 </div>
 {{else}}

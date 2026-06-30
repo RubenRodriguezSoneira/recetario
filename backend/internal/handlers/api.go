@@ -107,11 +107,16 @@ func (h *APIHandler) getRecipes(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	currentUserID, hasUser := appmiddleware.GetUserID(r.Context())
+
 	// Convert recipes to map format for templates/JSON
 	recipeMaps := make([]map[string]interface{}, len(recipes))
 	for i, recipe := range recipes {
+		isOwner := hasUser && currentUserID == recipe.UserID
 		recipeMaps[i] = map[string]interface{}{
 			"id":          recipe.ID,
+			"user_id":     recipe.UserID,
+			"is_owner":    isOwner,
 			"title":       recipe.Title,
 			"description": recipe.Description,
 			"cook_time":   recipe.CookTime,
