@@ -274,15 +274,21 @@ func TestSecurityHeaders(t *testing.T) {
 	csp := w.Header().Get("Content-Security-Policy")
 	checks := []string{
 		"default-src 'self'",
-		"script-src 'self' 'unsafe-inline' https://unpkg.com https://cdn.tailwindcss.com",
-		"style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.tailwindcss.com",
-		"font-src 'self' https://fonts.gstatic.com data:",
+		"script-src 'self' 'unsafe-inline'",
+		"style-src 'self' 'unsafe-inline'",
+		"font-src 'self'",
 		"img-src 'self' data:",
 	}
 
 	for _, check := range checks {
 		if !strings.Contains(csp, check) {
 			t.Fatalf("expected CSP to contain %q, got %q", check, csp)
+		}
+	}
+
+	for _, blocked := range []string{"unpkg.com", "cdn.tailwindcss.com", "fonts.googleapis.com", "fonts.gstatic.com"} {
+		if strings.Contains(csp, blocked) {
+			t.Fatalf("expected CSP to avoid %q, got %q", blocked, csp)
 		}
 	}
 
