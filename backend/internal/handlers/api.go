@@ -151,7 +151,7 @@ func (h *APIHandler) createRecipe(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := recipe.Validate(); err != nil {
-		appmiddleware.WriteJSONError(w, http.StatusBadRequest, "RECIPE_VALIDATION_FAILED", "Invalid recipe data", "La receta no es válida. Revisa los campos obligatorios.")
+		appmiddleware.WriteJSONError(w, http.StatusBadRequest, "RECIPE_VALIDATION_FAILED", "Invalid recipe data", err.Error())
 		return
 	}
 
@@ -245,7 +245,7 @@ func (h *APIHandler) updateRecipe(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := recipe.Validate(); err != nil {
-		appmiddleware.WriteJSONError(w, http.StatusBadRequest, "RECIPE_VALIDATION_FAILED", "Invalid recipe data", "La receta no es válida. Revisa los campos obligatorios.")
+		appmiddleware.WriteJSONError(w, http.StatusBadRequest, "RECIPE_VALIDATION_FAILED", "Invalid recipe data", err.Error())
 		return
 	}
 

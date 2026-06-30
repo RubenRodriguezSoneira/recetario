@@ -24,7 +24,7 @@
                 {{range .recipe.ingredients}}
                 <li class="ingredient-item">
                     <input type="checkbox" class="w-4 h-4">
-                    <span>{{.amount}} {{.unit}} <strong>{{.name}}</strong></span>
+                    <span>{{.Amount}} {{.Unit}} <strong>{{.Name}}</strong></span>
                 </li>
                 {{end}}
             </ul>
@@ -37,7 +37,7 @@
                 {{range .recipe.instructions}}
                 <li class="instruction-item">
                     <span class="step-num"></span>
-                    <p>{{.text}}</p>
+                    <p>{{.Text}}</p>
                 </li>
                 {{end}}
             </ol>

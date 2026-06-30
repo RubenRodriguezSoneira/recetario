@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/mail"
 	"strings"
 	"time"
 
@@ -24,6 +25,11 @@ func isUniqueUserConflict(err error) bool {
 	errMsg := strings.ToLower(err.Error())
 	return strings.Contains(errMsg, "unique constraint failed: users.email") ||
 		strings.Contains(errMsg, "unique constraint failed: users.username")
+}
+
+func isValidEmailFormat(email string) bool {
+	addr, err := mail.ParseAddress(email)
+	return err == nil && addr.Address == email
 }
 
 func buildAuthCookie(r *http.Request, token string, maxAge int) *http.Cookie {
@@ -126,9 +132,29 @@ func (h *AuthHandler) HandleRegister(w http.ResponseWriter, r *http.Request) {
 
 	req.Email = strings.ToLower(strings.TrimSpace(req.Email))
 	req.Username = strings.ToLower(strings.TrimSpace(req.Username))
-	if req.Email == "" || req.Username == "" || len(req.Password) < 8 {
-		log.Info("Register failed: missing required fields")
-		appmiddleware.WriteJSONError(w, http.StatusBadRequest, "AUTH_VALIDATION_FAILED", "Invalid registration data", "Email, usuario y contraseña (mínimo 8 caracteres) son obligatorios.")
+	if req.Email == "" {
+		log.Info("Register failed: email required")
+		appmiddleware.WriteJSONError(w, http.StatusBadRequest, "AUTH_VALIDATION_FAILED", "Invalid registration data", "El email es obligatorio.")
+		return
+	}
+	if !isValidEmailFormat(req.Email) {
+		log.Info("Register failed: invalid email format")
+		appmiddleware.WriteJSONError(w, http.StatusBadRequest, "AUTH_VALIDATION_FAILED", "Invalid registration data", "El formato del email no es válido.")
+		return
+	}
+	if req.Username == "" {
+		log.Info("Register failed: username required")
+		appmiddleware.WriteJSONError(w, http.StatusBadRequest, "AUTH_VALIDATION_FAILED", "Invalid registration data", "El nombre de usuario es obligatorio.")
+		return
+	}
+	if req.Password == "" {
+		log.Info("Register failed: password required")
+		appmiddleware.WriteJSONError(w, http.StatusBadRequest, "AUTH_VALIDATION_FAILED", "Invalid registration data", "La contraseña es obligatoria.")
+		return
+	}
+	if len(req.Password) < 8 {
+		log.Info("Register failed: password too short")
+		appmiddleware.WriteJSONError(w, http.StatusBadRequest, "AUTH_VALIDATION_FAILED", "Invalid registration data", "La contraseña debe tener al menos 8 caracteres.")
 		return
 	}
 
@@ -205,9 +231,19 @@ func (h *AuthHandler) HandleLogin(w http.ResponseWriter, r *http.Request) {
 	}
 
 	req.Email = strings.ToLower(strings.TrimSpace(req.Email))
-	if req.Email == "" || req.Password == "" {
-		log.Info("Login failed: missing email or password")
-		appmiddleware.WriteJSONError(w, http.StatusBadRequest, "AUTH_VALIDATION_FAILED", "Invalid login data", "Email y contraseña son obligatorios.")
+	if req.Email == "" {
+		log.Info("Login failed: email required")
+		appmiddleware.WriteJSONError(w, http.StatusBadRequest, "AUTH_VALIDATION_FAILED", "Invalid login data", "El email es obligatorio.")
+		return
+	}
+	if !isValidEmailFormat(req.Email) {
+		log.Info("Login failed: invalid email format")
+		appmiddleware.WriteJSONError(w, http.StatusBadRequest, "AUTH_VALIDATION_FAILED", "Invalid login data", "El formato del email no es válido.")
+		return
+	}
+	if req.Password == "" {
+		log.Info("Login failed: password required")
+		appmiddleware.WriteJSONError(w, http.StatusBadRequest, "AUTH_VALIDATION_FAILED", "Invalid login data", "La contraseña es obligatoria.")
 		return
 	}
 

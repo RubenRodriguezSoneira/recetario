@@ -83,6 +83,9 @@ type TagCount struct {
 }
 
 func (r *Recipe) Validate() error {
+	if r.Description == "" {
+		return fmt.Errorf("description is required")
+	}
 	if r.Title == "" {
 		return fmt.Errorf("title is required")
 	}

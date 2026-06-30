@@ -152,8 +152,14 @@ func TestAuthHandler_Register(t *testing.T) {
 	}{
 		{"valid", `{"email":"new@example.com","username":"newbie","password":"supersecret"}`, "", http.StatusCreated, "", ""},
 		{"duplicate email", `{"email":"dup@example.com","username":"other","password":"supersecret"}`, "dup@example.com", http.StatusConflict, "USER_ALREADY_EXISTS", "El email o nombre de usuario ya está en uso."},
-		{"short password", `{"email":"x@example.com","username":"x","password":"short"}`, "", http.StatusBadRequest, "AUTH_VALIDATION_FAILED", "Email, usuario y contraseña (mínimo 8 caracteres) son obligatorios."},
-		{"missing email", `{"username":"x","password":"supersecret"}`, "", http.StatusBadRequest, "AUTH_VALIDATION_FAILED", "Email, usuario y contraseña (mínimo 8 caracteres) son obligatorios."},
+		{"missing all required fields returns email first", `{}`, "", http.StatusBadRequest, "AUTH_VALIDATION_FAILED", "El email es obligatorio."},
+		{"missing email", `{"username":"x","password":"supersecret"}`, "", http.StatusBadRequest, "AUTH_VALIDATION_FAILED", "El email es obligatorio."},
+		{"invalid email format", `{"email":"x","username":"x","password":"supersecret"}`, "", http.StatusBadRequest, "AUTH_VALIDATION_FAILED", "El formato del email no es válido."},
+		{"missing username returned before password constraints", `{"email":"x@example.com","password":"short"}`, "", http.StatusBadRequest, "AUTH_VALIDATION_FAILED", "El nombre de usuario es obligatorio."},
+		{"missing username", `{"email":"x@example.com","password":"supersecret"}`, "", http.StatusBadRequest, "AUTH_VALIDATION_FAILED", "El nombre de usuario es obligatorio."},
+		{"missing password", `{"email":"x@example.com","username":"x"}`, "", http.StatusBadRequest, "AUTH_VALIDATION_FAILED", "La contraseña es obligatoria."},
+		{"short password", `{"email":"x@example.com","username":"x","password":"short"}`, "", http.StatusBadRequest, "AUTH_VALIDATION_FAILED", "La contraseña debe tener al menos 8 caracteres."},
+		{"validation order returns first failure", `{"email":"bad-email","password":"short"}`, "", http.StatusBadRequest, "AUTH_VALIDATION_FAILED", "El formato del email no es válido."},
 		{"invalid json", `not json`, "", http.StatusBadRequest, "AUTH_INVALID_BODY", "No pudimos procesar la solicitud. Revisa los datos e inténtalo de nuevo."},
 	}
 
@@ -224,7 +230,11 @@ func TestAuthHandler_Login(t *testing.T) {
 		{"valid", `{"email":"chef@example.com","password":"password123"}`, http.StatusOK, "", ""},
 		{"wrong password", `{"email":"chef@example.com","password":"wrongpass"}`, http.StatusUnauthorized, "INVALID_CREDENTIALS", "Credenciales inválidas."},
 		{"unknown email", `{"email":"ghost@example.com","password":"password123"}`, http.StatusUnauthorized, "INVALID_CREDENTIALS", "Credenciales inválidas."},
-		{"missing fields", `{"email":"chef@example.com"}`, http.StatusBadRequest, "AUTH_VALIDATION_FAILED", "Email y contraseña son obligatorios."},
+		{"missing all required fields returns email first", `{}`, http.StatusBadRequest, "AUTH_VALIDATION_FAILED", "El email es obligatorio."},
+		{"missing email", `{"password":"password123"}`, http.StatusBadRequest, "AUTH_VALIDATION_FAILED", "El email es obligatorio."},
+		{"invalid email format", `{"email":"chef","password":"password123"}`, http.StatusBadRequest, "AUTH_VALIDATION_FAILED", "El formato del email no es válido."},
+		{"missing password", `{"email":"chef@example.com"}`, http.StatusBadRequest, "AUTH_VALIDATION_FAILED", "La contraseña es obligatoria."},
+		{"validation order returns first failure", `{"email":"bad-email"}`, http.StatusBadRequest, "AUTH_VALIDATION_FAILED", "El formato del email no es válido."},
 		{"invalid json", `nope`, http.StatusBadRequest, "AUTH_INVALID_BODY", "No pudimos procesar la solicitud. Revisa los datos e inténtalo de nuevo."},
 	}
 
