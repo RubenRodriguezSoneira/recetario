@@ -145,6 +145,23 @@ func TestAuthHandler_Register(t *testing.T) {
 				if len(store.created) != 1 || store.created[0].Password == "supersecret" {
 					t.Error("password was not hashed before storage")
 				}
+
+				resCookies := w.Result().Cookies()
+				foundAuthCookie := false
+				for _, c := range resCookies {
+					if c.Name == appmiddleware.AuthCookieName {
+						foundAuthCookie = true
+						if !c.HttpOnly {
+							t.Error("expected auth cookie to be HttpOnly")
+						}
+						if c.SameSite != http.SameSiteLaxMode {
+							t.Errorf("expected SameSite Lax, got %v", c.SameSite)
+						}
+					}
+				}
+				if !foundAuthCookie {
+					t.Error("expected auth cookie in register response")
+				}
 			}
 		})
 	}
@@ -185,6 +202,20 @@ func TestAuthHandler_Login(t *testing.T) {
 				if resp.Token == "" {
 					t.Error("expected a token")
 				}
+
+				resCookies := w.Result().Cookies()
+				foundAuthCookie := false
+				for _, c := range resCookies {
+					if c.Name == appmiddleware.AuthCookieName {
+						foundAuthCookie = true
+						if c.Value == "" {
+							t.Error("expected non-empty auth cookie value")
+						}
+					}
+				}
+				if !foundAuthCookie {
+					t.Error("expected auth cookie in login response")
+				}
 			}
 		})
 	}
@@ -205,5 +236,34 @@ func TestAuthHandler_Login_NoBackdoor(t *testing.T) {
 
 	if w.Code != http.StatusUnauthorized {
 		t.Fatalf("status = %d, want 401 (backdoor must be gone)", w.Code)
+	}
+}
+
+func TestAuthHandler_Logout(t *testing.T) {
+	handler := newAuthHandler(newFakeUserStore())
+	req := httptest.NewRequest(http.MethodPost, "/api/auth/logout", nil)
+	w := httptest.NewRecorder()
+
+	handler.HandleLogout(w, req)
+
+	if w.Code != http.StatusSeeOther {
+		t.Fatalf("status = %d, want %d", w.Code, http.StatusSeeOther)
+	}
+	if location := w.Header().Get("Location"); location != "/" {
+		t.Fatalf("Location = %q, want /", location)
+	}
+
+	resCookies := w.Result().Cookies()
+	foundAuthCookie := false
+	for _, c := range resCookies {
+		if c.Name == appmiddleware.AuthCookieName {
+			foundAuthCookie = true
+			if c.MaxAge >= 0 {
+				t.Fatalf("expected cookie MaxAge < 0 to clear, got %d", c.MaxAge)
+			}
+		}
+	}
+	if !foundAuthCookie {
+		t.Fatal("expected auth cookie to be cleared on logout")
 	}
 }

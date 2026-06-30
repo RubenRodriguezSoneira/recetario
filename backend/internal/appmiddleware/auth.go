@@ -66,27 +66,39 @@ func (a *AuthService) ValidateToken(tokenString string) (*Claims, error) {
 type contextKey string
 
 const (
-	UserClaimsKey contextKey = "user_claims"
-	UserIDKey     contextKey = "user_id"
+	UserClaimsKey  contextKey = "user_claims"
+	UserIDKey      contextKey = "user_id"
+	AuthCookieName            = "auth_token"
 )
+
+func (a *AuthService) tokenFromRequest(r *http.Request) (string, bool) {
+	authHeader := r.Header.Get("Authorization")
+	if authHeader != "" {
+		tokenParts := strings.Split(authHeader, " ")
+		if len(tokenParts) == 2 && tokenParts[0] == "Bearer" && tokenParts[1] != "" {
+			return tokenParts[1], true
+		}
+		return "", false
+	}
+
+	cookie, err := r.Cookie(AuthCookieName)
+	if err != nil || cookie.Value == "" {
+		return "", false
+	}
+	return cookie.Value, true
+}
 
 func (a *AuthService) AuthMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
 
-		authHeader := r.Header.Get("Authorization")
-		if authHeader == "" {
-			http.Error(w, "Authorization header required", http.StatusUnauthorized)
+		token, ok := a.tokenFromRequest(r)
+		if !ok {
+			http.Error(w, "Authorization header or auth_token cookie required", http.StatusUnauthorized)
 			return
 		}
 
-		tokenParts := strings.Split(authHeader, " ")
-		if len(tokenParts) != 2 || tokenParts[0] != "Bearer" {
-			http.Error(w, "Invalid authorization format", http.StatusUnauthorized)
-			return
-		}
-
-		claims, err := a.ValidateToken(tokenParts[1])
+		claims, err := a.ValidateToken(token)
 		if err != nil {
 			logger.LogError(ctx, err, "Token validation failed")
 			http.Error(w, "Invalid token", http.StatusUnauthorized)
@@ -104,14 +116,11 @@ func (a *AuthService) OptionalAuthMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
 
-		authHeader := r.Header.Get("Authorization")
-		if authHeader != "" {
-			tokenParts := strings.Split(authHeader, " ")
-			if len(tokenParts) == 2 && tokenParts[0] == "Bearer" {
-				if claims, err := a.ValidateToken(tokenParts[1]); err == nil {
-					ctx = context.WithValue(ctx, UserClaimsKey, claims)
-					ctx = context.WithValue(ctx, UserIDKey, claims.UserID)
-				}
+		token, ok := a.tokenFromRequest(r)
+		if ok {
+			if claims, err := a.ValidateToken(token); err == nil {
+				ctx = context.WithValue(ctx, UserClaimsKey, claims)
+				ctx = context.WithValue(ctx, UserIDKey, claims.UserID)
 			}
 		}
 

@@ -1,46 +1,38 @@
 {{define "content"}}
 <div style="max-width: 860px; margin: 0 auto;">
     <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:2rem;">
-        <h1 style="font-family:'Playfair Display',serif; font-size:2rem;">Nueva receta</h1>
-        <a href="/recipes" class="btn-secondary">← Volver</a>
+        <h1 style="font-family:'Playfair Display',serif; font-size:2rem;">Editar receta</h1>
+        <a href="/recipes/{{.RecipeID}}" class="btn-secondary">← Volver</a>
     </div>
 
-    <form id="create-recipe-form">
+    <form id="edit-recipe-form" data-recipe-id="{{.RecipeID}}">
         <div id="form-message" style="margin-bottom:1rem;"></div>
 
-        <!-- Basic Info -->
         <div class="form-panel">
             <h2>Información básica</h2>
 
             <div class="form-group">
                 <label class="form-label" for="title">Nombre de la receta</label>
-                <input type="text" id="title" name="title" required
-                       placeholder="ej. Paella valenciana"
-                       class="form-input">
+                <input type="text" id="title" name="title" required class="form-input">
             </div>
 
             <div class="form-group">
                 <label class="form-label" for="description">Descripción</label>
-                <textarea id="description" name="description" rows="3" required
-                          placeholder="Describe brevemente tu receta…"
-                          class="form-textarea"></textarea>
+                <textarea id="description" name="description" rows="3" required class="form-textarea"></textarea>
             </div>
 
             <div style="display:grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap:1rem;">
                 <div class="form-group">
                     <label class="form-label" for="prep_time">Prep (min)</label>
-                    <input type="number" id="prep_time" name="prep_time" min="0" required
-                           placeholder="15" class="form-input">
+                    <input type="number" id="prep_time" name="prep_time" min="0" required class="form-input">
                 </div>
                 <div class="form-group">
                     <label class="form-label" for="cook_time">Cocción (min)</label>
-                    <input type="number" id="cook_time" name="cook_time" min="0" required
-                           placeholder="30" class="form-input">
+                    <input type="number" id="cook_time" name="cook_time" min="0" required class="form-input">
                 </div>
                 <div class="form-group">
                     <label class="form-label" for="servings">Raciones</label>
-                    <input type="number" id="servings" name="servings" min="1" required
-                           placeholder="4" class="form-input">
+                    <input type="number" id="servings" name="servings" min="1" required class="form-input">
                 </div>
                 <div class="form-group">
                     <label class="form-label" for="difficulty">Dificultad</label>
@@ -54,7 +46,6 @@
             </div>
         </div>
 
-        <!-- Ingredients -->
         <div class="form-panel">
             <h2>Ingredientes</h2>
             <div style="display:grid; grid-template-columns: 2fr 1fr 1fr auto; gap:0.5rem; margin-bottom:0.5rem;">
@@ -63,28 +54,13 @@
                 <span class="form-label" style="margin:0;">Unidad</span>
                 <span></span>
             </div>
-            <div id="ingredients-list">
-                <div class="ingredient-row">
-                    <input type="text" name="ingredients[0].name" placeholder="ej. Arroz" required class="form-input">
-                    <input type="text" name="ingredients[0].amount" placeholder="400" required class="form-input">
-                    <input type="text" name="ingredients[0].unit" placeholder="g" required class="form-input">
-                    <button type="button" onclick="removeIngredient(this)" class="btn-remove">✕</button>
-                </div>
-            </div>
+            <div id="ingredients-list"></div>
             <button type="button" onclick="addIngredient()" class="btn-add" style="margin-top:0.75rem;">+ Añadir ingrediente</button>
         </div>
 
-        <!-- Instructions -->
         <div class="form-panel">
             <h2>Pasos de preparación</h2>
-            <div id="instructions-list">
-                <div class="instruction-row">
-                    <span class="step-label">1.</span>
-                    <textarea name="instructions[0].text" placeholder="Describe el primer paso…" rows="2" required
-                              class="form-textarea" style="flex:1;"></textarea>
-                    <button type="button" onclick="removeInstruction(this)" class="btn-remove" style="align-self:flex-start; margin-top:0.4rem;">✕</button>
-                </div>
-            </div>
+            <div id="instructions-list"></div>
             <button type="button" onclick="addInstruction()" class="btn-add" style="margin-top:0.75rem;">+ Añadir paso</button>
         </div>
 
@@ -92,14 +68,13 @@
             <h2>Etiquetas</h2>
             <div class="form-group">
                 <label class="form-label" for="tags">Etiquetas (separadas por coma)</label>
-                <input type="text" id="tags" name="tags" placeholder="rápido, cena, pasta" class="form-input">
+                <input type="text" id="tags" name="tags" class="form-input">
             </div>
         </div>
 
-        <!-- Submit -->
         <div style="display:flex; justify-content:flex-end; gap:1rem;">
-            <a href="/recipes" class="btn-secondary" style="padding:0.7rem 1.5rem;">Cancelar</a>
-            <button type="submit" class="btn-primary" style="padding:0.7rem 1.75rem; font-size:1rem;">Guardar receta</button>
+            <a href="/recipes/{{.RecipeID}}" class="btn-secondary" style="padding:0.7rem 1.5rem;">Cancelar</a>
+            <button type="submit" class="btn-primary" style="padding:0.7rem 1.75rem; font-size:1rem;">Guardar cambios</button>
         </div>
     </form>
 </div>

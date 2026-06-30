@@ -150,43 +150,49 @@ func TestAuthMiddleware(t *testing.T) {
 	secret := "test-secret-key"
 	auth := NewAuthService(secret)
 
-	token, _ := auth.GenerateToken("1", "test@example.com", false)
+	validToken, _ := auth.GenerateToken("1", "test@example.com", false)
+	otherToken, _ := auth.GenerateToken("2", "other@example.com", false)
 
 	tests := []struct {
 		name           string
 		authHeader     string
+		cookieToken    string
 		expectedStatus int
-		expectUserID   bool
+		expectedUserID string
 	}{
 		{
 			name:           "Valid authorization header",
-			authHeader:     "Bearer " + token,
+			authHeader:     "Bearer " + validToken,
 			expectedStatus: http.StatusOK,
-			expectUserID:   true,
+			expectedUserID: "1",
 		},
 		{
-			name:           "Missing authorization header",
-			authHeader:     "",
-			expectedStatus: http.StatusUnauthorized,
-			expectUserID:   false,
+			name:           "Valid auth cookie",
+			cookieToken:    validToken,
+			expectedStatus: http.StatusOK,
+			expectedUserID: "1",
 		},
 		{
-			name:           "Invalid authorization format",
-			authHeader:     "InvalidToken",
-			expectedStatus: http.StatusUnauthorized,
-			expectUserID:   false,
+			name:           "Header has priority over cookie",
+			authHeader:     "Bearer " + otherToken,
+			cookieToken:    validToken,
+			expectedStatus: http.StatusOK,
+			expectedUserID: "2",
 		},
 		{
-			name:           "Invalid token",
-			authHeader:     "Bearer invalid.token.here",
+			name:           "Missing credentials",
 			expectedStatus: http.StatusUnauthorized,
-			expectUserID:   false,
 		},
 		{
-			name:           "Wrong Bearer format",
-			authHeader:     "Bearer token",
+			name:           "Invalid header format does not fallback to cookie",
+			authHeader:     "InvalidTokenFormat",
+			cookieToken:    validToken,
 			expectedStatus: http.StatusUnauthorized,
-			expectUserID:   false,
+		},
+		{
+			name:           "Invalid cookie token",
+			cookieToken:    "invalid-token",
+			expectedStatus: http.StatusUnauthorized,
 		},
 	}
 
@@ -196,20 +202,24 @@ func TestAuthMiddleware(t *testing.T) {
 			if tt.authHeader != "" {
 				req.Header.Set("Authorization", tt.authHeader)
 			}
+			if tt.cookieToken != "" {
+				req.AddCookie(&http.Cookie{Name: AuthCookieName, Value: tt.cookieToken})
+			}
 
 			w := httptest.NewRecorder()
 
 			next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				userID, ok := GetUserID(r.Context())
-				if tt.expectUserID {
+				if tt.expectedUserID == "" && ok {
+					t.Error("Unexpected user ID in context")
+				}
+				if tt.expectedUserID != "" {
 					if !ok {
 						t.Error("Expected user ID in context")
 					}
-					if userID != "1" {
-						t.Errorf("Expected user ID 1, got %s", userID)
+					if userID != tt.expectedUserID {
+						t.Errorf("Expected user ID %s, got %s", tt.expectedUserID, userID)
 					}
-				} else if ok {
-					t.Error("Unexpected user ID in context")
 				}
 				w.WriteHeader(http.StatusOK)
 			})
@@ -228,30 +238,42 @@ func TestOptionalAuthMiddleware(t *testing.T) {
 	auth := NewAuthService(secret)
 
 	token, _ := auth.GenerateToken("1", "test@example.com", false)
+	otherToken, _ := auth.GenerateToken("2", "other@example.com", false)
 
 	tests := []struct {
 		name           string
 		authHeader     string
+		cookieToken    string
 		expectedStatus int
-		expectUserID   bool
+		expectedUserID string
 	}{
 		{
 			name:           "Valid authorization header",
 			authHeader:     "Bearer " + token,
 			expectedStatus: http.StatusOK,
-			expectUserID:   true,
+			expectedUserID: "1",
 		},
 		{
-			name:           "Missing authorization header",
-			authHeader:     "",
+			name:           "Cookie fallback when no header",
+			cookieToken:    token,
 			expectedStatus: http.StatusOK,
-			expectUserID:   false,
+			expectedUserID: "1",
 		},
 		{
-			name:           "Invalid token - should still pass",
-			authHeader:     "Bearer invalid.token.here",
+			name:           "Header priority over cookie",
+			authHeader:     "Bearer " + otherToken,
+			cookieToken:    token,
 			expectedStatus: http.StatusOK,
-			expectUserID:   false,
+			expectedUserID: "2",
+		},
+		{
+			name:           "Missing credentials",
+			expectedStatus: http.StatusOK,
+		},
+		{
+			name:           "Invalid token should still pass",
+			cookieToken:    "invalid-token",
+			expectedStatus: http.StatusOK,
 		},
 	}
 
@@ -261,20 +283,24 @@ func TestOptionalAuthMiddleware(t *testing.T) {
 			if tt.authHeader != "" {
 				req.Header.Set("Authorization", tt.authHeader)
 			}
+			if tt.cookieToken != "" {
+				req.AddCookie(&http.Cookie{Name: AuthCookieName, Value: tt.cookieToken})
+			}
 
 			w := httptest.NewRecorder()
 
 			next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				userID, ok := GetUserID(r.Context())
-				if tt.expectUserID {
+				if tt.expectedUserID == "" && ok {
+					t.Error("Unexpected user ID in context")
+				}
+				if tt.expectedUserID != "" {
 					if !ok {
 						t.Error("Expected user ID in context")
 					}
-					if userID != "1" {
-						t.Errorf("Expected user ID 1, got %s", userID)
+					if userID != tt.expectedUserID {
+						t.Errorf("Expected user ID %s, got %s", tt.expectedUserID, userID)
 					}
-				} else if ok {
-					t.Error("Unexpected user ID in context")
 				}
 				w.WriteHeader(http.StatusOK)
 			})

@@ -24,7 +24,7 @@
                 {{range .recipe.ingredients}}
                 <li class="ingredient-item">
                     <input type="checkbox" class="w-4 h-4">
-                    <span>{{.quantity}} {{.unit}} <strong>{{.name}}</strong></span>
+                    <span>{{.amount}} {{.unit}} <strong>{{.name}}</strong></span>
                 </li>
                 {{end}}
             </ul>
@@ -37,7 +37,7 @@
                 {{range .recipe.instructions}}
                 <li class="instruction-item">
                     <span class="step-num"></span>
-                    <p>{{.}}</p>
+                    <p>{{.text}}</p>
                 </li>
                 {{end}}
             </ol>
@@ -49,7 +49,10 @@
         <button class="btn-primary" style="padding:0.7rem 1.75rem;">🍳 Empezar a cocinar</button>
         <button class="btn-secondary" onclick="window.print()" style="padding:0.7rem 1.75rem;">🖨️ Imprimir</button>
         <a href="/recipes" class="btn-secondary" style="padding:0.7rem 1.75rem;">← Volver</a>
-        <button class="btn-danger" style="margin-left:auto;">Eliminar receta</button>
+        {{if .recipe.is_owner}}
+        <a href="/recipes/{{.recipe.id}}/edit" class="btn-secondary" style="margin-left:auto;">✏️ Editar</a>
+        <button class="btn-danger" onclick="deleteRecipe('{{.recipe.id}}')">Eliminar receta</button>
+        {{end}}
     </div>
 </div>
 {{else}}

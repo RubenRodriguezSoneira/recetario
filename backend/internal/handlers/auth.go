@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"strings"
+	"time"
 
 	"golang.org/x/crypto/bcrypt"
 
@@ -14,6 +15,32 @@ import (
 
 // tokenExpiresInSeconds mirrors the AuthService token expiry (24h) reported to clients.
 const tokenExpiresInSeconds = 86400
+
+func buildAuthCookie(r *http.Request, token string, maxAge int) *http.Cookie {
+	secure := false
+	if r.TLS != nil {
+		secure = true
+	}
+	if forwardedProto := strings.TrimSpace(r.Header.Get("X-Forwarded-Proto")); strings.EqualFold(forwardedProto, "https") {
+		secure = true
+	}
+
+	return &http.Cookie{
+		Name:     appmiddleware.AuthCookieName,
+		Value:    token,
+		Path:     "/",
+		MaxAge:   maxAge,
+		HttpOnly: true,
+		SameSite: http.SameSiteLaxMode,
+		Secure:   secure,
+	}
+}
+
+func clearAuthCookie(r *http.Request) *http.Cookie {
+	cookie := buildAuthCookie(r, "", -1)
+	cookie.Expires = time.Unix(0, 0)
+	return cookie
+}
 
 // UserStore describes the user data-access methods the auth and user handlers
 // depend on. The concrete *repositories.UserRepository satisfies it; tests inject
@@ -137,6 +164,7 @@ func (h *AuthHandler) HandleRegister(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	http.SetCookie(w, buildAuthCookie(r, token, tokenExpiresInSeconds))
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(AuthResponse{
@@ -180,12 +208,18 @@ func (h *AuthHandler) HandleLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	http.SetCookie(w, buildAuthCookie(r, token, tokenExpiresInSeconds))
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(AuthResponse{
 		Token:     token,
 		User:      toPublicUser(user),
 		ExpiresIn: tokenExpiresInSeconds,
 	})
+}
+
+func (h *AuthHandler) HandleLogout(w http.ResponseWriter, r *http.Request) {
+	http.SetCookie(w, clearAuthCookie(r))
+	http.Redirect(w, r, "/", http.StatusSeeOther)
 }
 
 func (h *AuthHandler) HandleRefresh(w http.ResponseWriter, r *http.Request) {

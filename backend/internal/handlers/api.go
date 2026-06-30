@@ -179,8 +179,13 @@ func (h *APIHandler) getRecipe(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	currentUserID, hasUser := appmiddleware.GetUserID(r.Context())
+	isOwner := hasUser && currentUserID == recipe.UserID
+
 	recipeMap := map[string]interface{}{
 		"id":           recipe.ID,
+		"user_id":      recipe.UserID,
+		"is_owner":     isOwner,
 		"title":        recipe.Title,
 		"description":  recipe.Description,
 		"prep_time":    recipe.PrepTime,

@@ -1,13 +1,18 @@
 package handlers
 
 import (
-	"github.com/go-chi/chi/v5"
 	"html/template"
 	"net/http"
+
+	"github.com/go-chi/chi/v5"
+
+	"recipe-app/internal/appmiddleware"
+	"recipe-app/internal/logger"
 )
 
 type WebHandler struct {
 	templates *template.Template
+	users     UserStore
 }
 
 type PageData struct {
@@ -16,7 +21,7 @@ type PageData struct {
 	RecipeID string
 }
 
-func NewWebHandler() *WebHandler {
+func NewWebHandler(users UserStore) *WebHandler {
 	templates, err := template.ParseGlob("web/templates/*.html")
 	if err != nil {
 		// Templates not found, create empty template for tests
@@ -25,6 +30,7 @@ func NewWebHandler() *WebHandler {
 
 	return &WebHandler{
 		templates: templates,
+		users:     users,
 	}
 }
 
@@ -62,9 +68,15 @@ func (h *WebHandler) HandleRecipes(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *WebHandler) HandleNewRecipe(w http.ResponseWriter, r *http.Request) {
+	user := h.getUserFromContext(r)
+	if user == nil {
+		http.Redirect(w, r, "/", http.StatusSeeOther)
+		return
+	}
+
 	data := PageData{
 		Title: "Create New Recipe - RecipeApp",
-		User:  h.getUserFromContext(r),
+		User:  user,
 	}
 
 	h.renderTemplate(w, "new-recipe.html", data)
@@ -81,8 +93,40 @@ func (h *WebHandler) HandleRecipeDetail(w http.ResponseWriter, r *http.Request) 
 	h.renderTemplate(w, "recipe-detail.html", data)
 }
 
+func (h *WebHandler) HandleEditRecipe(w http.ResponseWriter, r *http.Request) {
+	user := h.getUserFromContext(r)
+	if user == nil {
+		http.Redirect(w, r, "/", http.StatusSeeOther)
+		return
+	}
+
+	recipeID := chi.URLParam(r, "id")
+	data := PageData{
+		Title:    "Edit Recipe - RecipeApp",
+		User:     user,
+		RecipeID: recipeID,
+	}
+
+	h.renderTemplate(w, "edit-recipe.html", data)
+}
+
 func (h *WebHandler) getUserFromContext(r *http.Request) *User {
-	// This would get user from JWT token in request context
-	// For now, return nil (not authenticated)
-	return nil
+	claims, ok := appmiddleware.GetUserClaims(r.Context())
+	if !ok || claims == nil || claims.UserID == "" || h.users == nil {
+		return nil
+	}
+
+	u, err := h.users.GetUserByID(claims.UserID)
+	if err != nil {
+		logger.FromContext(r.Context()).Error("Failed to load user from context", "error", err)
+		return nil
+	}
+
+	return &User{
+		ID:        u.ID,
+		Email:     u.Email,
+		Username:  u.Username,
+		FirstName: u.FirstName,
+		LastName:  u.LastName,
+	}
 }
