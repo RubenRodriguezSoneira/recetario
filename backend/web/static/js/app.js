@@ -58,37 +58,44 @@ function addInstruction() {
 function removeInstruction(button) {
     const instructionItem = button.closest('.instruction-row');
     instructionItem.remove();
-    // Renumber remaining instructions
+    renumberInstructionRows();
+}
+
+function renumberInstructionRows() {
     const instructions = document.querySelectorAll('.instruction-row');
+
     instructions.forEach((item, index) => {
         const label = item.querySelector('.step-label');
         const textarea = item.querySelector('textarea');
-        if (label) label.textContent = `${index + 1}.`;
-        if (textarea) textarea.placeholder = `Paso ${index + 1}`;
+
+        if (label) {
+            label.textContent = `${index + 1}.`;
+        }
+
+        if (textarea) {
+            textarea.name = `instructions[${index}]`;
+            textarea.placeholder = `Paso ${index + 1}`;
+        }
     });
+
     instructionCount = instructions.length;
 }
 
 // Mobile menu toggle
 function toggleMobileMenu() {
     const nav = document.querySelector('.site-nav');
-    if (nav) {
-        nav.classList.toggle('open');
+    const button = document.getElementById('mobile-menu-btn');
+
+    if (!nav) {
+        return;
+    }
+
+    const isOpen = nav.classList.toggle('open');
+
+    if (button) {
+        button.setAttribute('aria-expanded', String(isOpen));
     }
 }
-
-// Close modals when clicking outside
-document.addEventListener('click', function(event) {
-    const loginModal = document.getElementById('loginModal');
-    const registerModal = document.getElementById('registerModal');
-    
-    if (event.target === loginModal) {
-        hideLoginModal();
-    }
-    if (event.target === registerModal) {
-        hideRegisterModal();
-    }
-});
 
 // HTMX event handlers
 document.addEventListener('htmx:afterRequest', function(event) {

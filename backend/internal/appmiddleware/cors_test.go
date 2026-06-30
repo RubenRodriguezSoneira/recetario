@@ -3,6 +3,7 @@ package appmiddleware
 import (
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 )
 
@@ -257,5 +258,41 @@ func TestCORS_NoConfig(t *testing.T) {
 	origin := w.Header().Get("Access-Control-Allow-Origin")
 	if origin != "" {
 		t.Errorf("Expected no origin header with empty config, got %s", origin)
+	}
+}
+
+func TestSecurityHeaders(t *testing.T) {
+	middleware := SecurityHeaders(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	w := httptest.NewRecorder()
+
+	middleware.ServeHTTP(w, req)
+
+	csp := w.Header().Get("Content-Security-Policy")
+	checks := []string{
+		"default-src 'self'",
+		"script-src 'self' 'unsafe-inline'",
+		"style-src 'self' 'unsafe-inline'",
+		"font-src 'self'",
+		"img-src 'self' data:",
+	}
+
+	for _, check := range checks {
+		if !strings.Contains(csp, check) {
+			t.Fatalf("expected CSP to contain %q, got %q", check, csp)
+		}
+	}
+
+	for _, blocked := range []string{"unpkg.com", "cdn.tailwindcss.com", "fonts.googleapis.com", "fonts.gstatic.com"} {
+		if strings.Contains(csp, blocked) {
+			t.Fatalf("expected CSP to avoid %q, got %q", blocked, csp)
+		}
+	}
+
+	if got := w.Header().Get("X-Frame-Options"); got != "DENY" {
+		t.Fatalf("expected X-Frame-Options DENY, got %q", got)
 	}
 }
