@@ -73,8 +73,12 @@ func LogRequest(ctx context.Context, method, path string, duration time.Duration
 
 func LogError(ctx context.Context, err error, msg string) {
 	logger := FromContext(ctx)
+	errorValue := ""
+	if err != nil {
+		errorValue = err.Error()
+	}
 	logger.Error(msg,
-		"error", err.Error(),
+		"error", errorValue,
 		"error_type", "application_error",
 	)
 }
