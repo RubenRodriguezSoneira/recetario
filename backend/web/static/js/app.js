@@ -143,6 +143,33 @@ function parseNumber(value) {
     return Number.isNaN(n) ? 0 : n;
 }
 
+function nonEmptyString(value) {
+    return typeof value === 'string' && value.trim() !== '' ? value.trim() : '';
+}
+
+async function parseAPIErrorMessage(response) {
+    const fallbackMessage = 'Ha ocurrido un error';
+    const contentType = (response.headers.get('content-type') || '').toLowerCase();
+
+    try {
+        if (contentType.includes('application/json')) {
+            const payload = await response.json();
+            return nonEmptyString(payload?.description) || fallbackMessage;
+        }
+
+        const rawText = await response.text();
+        const trimmed = rawText.trim();
+        if (trimmed.startsWith('{')) {
+            const payload = JSON.parse(trimmed);
+            return nonEmptyString(payload?.description) || fallbackMessage;
+        }
+    } catch {
+        return fallbackMessage;
+    }
+
+    return fallbackMessage;
+}
+
 function collectRecipePayload(form) {
     const title = form.querySelector('#title')?.value.trim() || '';
     const description = form.querySelector('#description')?.value.trim() || '';
@@ -216,9 +243,9 @@ function setupAuthForms() {
             });
 
             if (!response.ok) {
-                const text = await response.text();
+                const message = await parseAPIErrorMessage(response);
                 if (errorEl) {
-                    errorEl.textContent = text || 'Error de autenticación';
+                    errorEl.textContent = message;
                     errorEl.style.display = 'block';
                 }
                 return;
@@ -254,9 +281,9 @@ function setupAuthForms() {
             });
 
             if (!response.ok) {
-                const text = await response.text();
+                const message = await parseAPIErrorMessage(response);
                 if (errorEl) {
-                    errorEl.textContent = text || 'No se pudo registrar';
+                    errorEl.textContent = message;
                     errorEl.style.display = 'block';
                 }
                 return;
@@ -295,8 +322,8 @@ function setupCreateRecipeForm() {
         });
 
         if (!response.ok) {
-            const text = await response.text();
-            showFormMessage(text || 'No se pudo crear la receta', true);
+            const message = await parseAPIErrorMessage(response);
+            showFormMessage(message, true);
             return;
         }
 
@@ -361,8 +388,8 @@ function setupEditRecipeForm() {
         });
 
         if (!response.ok) {
-            const text = await response.text();
-            showFormMessage(text || 'No se pudo actualizar la receta', true);
+            const message = await parseAPIErrorMessage(response);
+            showFormMessage(message, true);
             return;
         }
 
@@ -387,13 +414,8 @@ async function deleteRecipe(recipeID) {
         return;
     }
 
-    if (response.status === 403) {
-        showFlashMessage('No tienes permisos para eliminar esta receta', 'error');
-        return;
-    }
-
-    const text = await response.text();
-    showFlashMessage(text || 'No se pudo eliminar la receta', 'error');
+    const message = await parseAPIErrorMessage(response);
+    showFlashMessage(message, 'error');
 }
 
 function showFlashMessage(message, type = 'info') {

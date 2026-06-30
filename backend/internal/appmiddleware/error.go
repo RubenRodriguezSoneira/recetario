@@ -11,9 +11,11 @@ import (
 )
 
 type ErrorResponse struct {
-	Error   string `json:"error"`
-	Message string `json:"message,omitempty"`
-	Code    string `json:"code,omitempty"`
+	Error       string `json:"error"`
+	Message     string `json:"message,omitempty"`
+	Code        string `json:"code,omitempty"`
+	Description string `json:"description,omitempty"`
+	UserMessage string `json:"user_message,omitempty"`
 }
 
 type AppError struct {
@@ -46,14 +48,7 @@ func ErrorHandler(next http.Handler) http.Handler {
 				ctx := r.Context()
 				logger.LogError(ctx, nil, "Panic recovered")
 
-				w.Header().Set("Content-Type", "application/json")
-				w.WriteHeader(http.StatusInternalServerError)
-
-				json.NewEncoder(w).Encode(ErrorResponse{
-					Error:   "Internal server error",
-					Message: "An unexpected error occurred",
-					Code:    "INTERNAL_ERROR",
-				})
+				WriteJSONError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "An unexpected error occurred", "Ocurrió un error inesperado. Inténtalo nuevamente.")
 			}
 		}()
 
@@ -63,28 +58,69 @@ func ErrorHandler(next http.Handler) http.Handler {
 
 type errorResponseWriter struct {
 	http.ResponseWriter
-	r *http.Request
+	r           *http.Request
+	errorStatus int
 }
 
 func (erw *errorResponseWriter) WriteHeader(statusCode int) {
+	if erw.errorStatus != 0 {
+		return
+	}
+
 	if statusCode >= 400 {
+		erw.errorStatus = statusCode
 		ctx := erw.r.Context()
 		logger.LogError(ctx, nil, "HTTP error response")
 
-		erw.ResponseWriter.Header().Set("Content-Type", "application/json")
-		erw.ResponseWriter.WriteHeader(statusCode)
-
-		errorResp := ErrorResponse{
-			Error:   http.StatusText(statusCode),
-			Message: getErrorMessage(statusCode),
-			Code:    getErrorCode(statusCode),
-		}
-
-		json.NewEncoder(erw.ResponseWriter).Encode(errorResp)
+		writeJSONErrorResponse(erw.ResponseWriter, statusCode, ErrorResponse{
+			Error:       http.StatusText(statusCode),
+			Message:     getErrorMessage(statusCode),
+			Code:        getErrorCode(statusCode),
+			Description: getErrorDescription(statusCode),
+			UserMessage: getErrorDescription(statusCode),
+		})
 		return
 	}
 
 	erw.ResponseWriter.WriteHeader(statusCode)
+}
+
+func (erw *errorResponseWriter) Write(p []byte) (int, error) {
+	if erw.errorStatus >= 400 {
+		return len(p), nil
+	}
+	return erw.ResponseWriter.Write(p)
+}
+
+func WriteJSONError(w http.ResponseWriter, statusCode int, code, message, description string) {
+	if code == "" {
+		code = getErrorCode(statusCode)
+	}
+	if message == "" {
+		message = getErrorMessage(statusCode)
+	}
+	if description == "" {
+		description = getErrorDescription(statusCode)
+	}
+
+	writeJSONErrorResponse(w, statusCode, ErrorResponse{
+		Error:       http.StatusText(statusCode),
+		Message:     message,
+		Code:        code,
+		Description: description,
+		UserMessage: description,
+	})
+}
+
+func writeJSONErrorResponse(w http.ResponseWriter, statusCode int, payload ErrorResponse) {
+	target := w
+	if erw, ok := w.(*errorResponseWriter); ok {
+		target = erw.ResponseWriter
+	}
+
+	target.Header().Set("Content-Type", "application/json")
+	target.WriteHeader(statusCode)
+	_ = json.NewEncoder(target).Encode(payload)
 }
 
 func getErrorMessage(statusCode int) string {
@@ -123,6 +159,26 @@ func getErrorCode(statusCode int) string {
 		return code
 	}
 	return "UNKNOWN_ERROR"
+}
+
+func getErrorDescription(statusCode int) string {
+	descriptions := map[int]string{
+		http.StatusBadRequest:          "La solicitud no es válida. Revisa los datos e inténtalo nuevamente.",
+		http.StatusUnauthorized:        "Debes iniciar sesión para continuar.",
+		http.StatusForbidden:           "No tienes permisos para realizar esta acción.",
+		http.StatusNotFound:            "No encontramos el recurso solicitado.",
+		http.StatusConflict:            "No se pudo completar la operación por un conflicto de datos.",
+		http.StatusMethodNotAllowed:    "Método no permitido.",
+		http.StatusTooManyRequests:     "Has realizado demasiadas solicitudes. Inténtalo en unos minutos.",
+		http.StatusInternalServerError: "Ocurrió un error interno. Inténtalo más tarde.",
+		http.StatusBadGateway:          "El servicio no está disponible en este momento.",
+		http.StatusServiceUnavailable:  "El servicio está temporalmente no disponible.",
+	}
+
+	if description, ok := descriptions[statusCode]; ok {
+		return description
+	}
+	return "No se pudo completar la solicitud."
 }
 
 func RequestLogger(next http.Handler) http.Handler {

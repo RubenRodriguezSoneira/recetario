@@ -190,10 +190,7 @@ func TestAPIHandler_CreateRecipe_InvalidBody(t *testing.T) {
 	w := httptest.NewRecorder()
 
 	handler.HandleCreateRecipe(w, req)
-
-	if w.Code != http.StatusBadRequest {
-		t.Errorf("Expected status 400 for invalid body, got %d", w.Code)
-	}
+	assertErrorContract(t, w, http.StatusBadRequest, "INVALID_JSON", "No pudimos procesar la receta. Revisa los datos e inténtalo de nuevo.")
 }
 
 func TestAPIHandler_CreateRecipe_InvalidRecipe(t *testing.T) {
@@ -204,10 +201,7 @@ func TestAPIHandler_CreateRecipe_InvalidRecipe(t *testing.T) {
 	w := httptest.NewRecorder()
 
 	handler.HandleCreateRecipe(w, req)
-
-	if w.Code != http.StatusBadRequest {
-		t.Errorf("Expected status 400 for invalid recipe, got %d", w.Code)
-	}
+	assertErrorContract(t, w, http.StatusBadRequest, "RECIPE_VALIDATION_FAILED", "La receta no es válida. Revisa los campos obligatorios.")
 }
 
 func TestAPIHandler_GetRecipe(t *testing.T) {
@@ -245,9 +239,7 @@ func TestAPIHandler_GetRecipe_NotFound(t *testing.T) {
 
 	handler.HandleRecipe(w, req)
 
-	if w.Code != http.StatusNotFound {
-		t.Errorf("Expected status 404 for missing recipe, got %d", w.Code)
-	}
+	assertErrorContract(t, w, http.StatusNotFound, "RECIPE_NOT_FOUND", "No encontramos la receta solicitada.")
 }
 
 func TestAPIHandler_UpdateRecipe(t *testing.T) {
@@ -285,10 +277,7 @@ func TestAPIHandler_UpdateRecipe_Forbidden(t *testing.T) {
 	w := httptest.NewRecorder()
 
 	handler.HandleUpdateRecipe(w, req)
-
-	if w.Code != http.StatusForbidden {
-		t.Errorf("Expected status 403 for non-owner, got %d", w.Code)
-	}
+	assertErrorContract(t, w, http.StatusForbidden, "FORBIDDEN", "No tienes permisos para editar esta receta.")
 }
 
 func TestAPIHandler_UpdateRecipe_Unauthorized(t *testing.T) {
@@ -300,10 +289,31 @@ func TestAPIHandler_UpdateRecipe_Unauthorized(t *testing.T) {
 	w := httptest.NewRecorder()
 
 	handler.HandleUpdateRecipe(w, req)
+	assertErrorContract(t, w, http.StatusUnauthorized, "UNAUTHORIZED", "Debes iniciar sesión para editar esta receta.")
+}
 
-	if w.Code != http.StatusUnauthorized {
-		t.Errorf("Expected status 401 without auth, got %d", w.Code)
-	}
+func TestAPIHandler_UpdateRecipe_InvalidBody(t *testing.T) {
+	handler := NewAPIHandler(newTestStore())
+
+	req := httptest.NewRequest(http.MethodPut, "/api/recipes/1", strings.NewReader("not json"))
+	req = withRecipeCtx(req, "1", testOwner)
+	w := httptest.NewRecorder()
+
+	handler.HandleUpdateRecipe(w, req)
+
+	assertErrorContract(t, w, http.StatusBadRequest, "INVALID_JSON", "No pudimos procesar la receta. Revisa los datos e inténtalo de nuevo.")
+}
+
+func TestAPIHandler_UpdateRecipe_InvalidRecipe(t *testing.T) {
+	handler := NewAPIHandler(newTestStore())
+
+	req := httptest.NewRequest(http.MethodPut, "/api/recipes/1", strings.NewReader(`{"cook_time":20}`))
+	req = withRecipeCtx(req, "1", testOwner)
+	w := httptest.NewRecorder()
+
+	handler.HandleUpdateRecipe(w, req)
+
+	assertErrorContract(t, w, http.StatusBadRequest, "RECIPE_VALIDATION_FAILED", "La receta no es válida. Revisa los campos obligatorios.")
 }
 
 func TestAPIHandler_UpdateRecipe_NotFound(t *testing.T) {
@@ -347,10 +357,19 @@ func TestAPIHandler_DeleteRecipe_Forbidden(t *testing.T) {
 	w := httptest.NewRecorder()
 
 	handler.HandleDeleteRecipe(w, req)
+	assertErrorContract(t, w, http.StatusForbidden, "FORBIDDEN", "No tienes permisos para eliminar esta receta.")
+}
 
-	if w.Code != http.StatusForbidden {
-		t.Errorf("Expected status 403 for non-owner, got %d", w.Code)
-	}
+func TestAPIHandler_DeleteRecipe_Unauthorized(t *testing.T) {
+	handler := NewAPIHandler(newTestStore())
+
+	req := httptest.NewRequest(http.MethodDelete, "/api/recipes/1", nil)
+	req = withRecipeCtx(req, "1", "")
+	w := httptest.NewRecorder()
+
+	handler.HandleDeleteRecipe(w, req)
+
+	assertErrorContract(t, w, http.StatusUnauthorized, "UNAUTHORIZED", "Debes iniciar sesión para eliminar esta receta.")
 }
 
 func TestAPIHandler_InvalidMethod(t *testing.T) {

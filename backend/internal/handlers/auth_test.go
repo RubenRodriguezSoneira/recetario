@@ -100,18 +100,61 @@ func newAuthHandler(store UserStore) *AuthHandler {
 	return NewAuthHandler(appmiddleware.NewAuthService("test-secret"), store)
 }
 
+type apiErrorResponse struct {
+	Error       string `json:"error"`
+	Message     string `json:"message"`
+	Code        string `json:"code"`
+	Description string `json:"description"`
+	UserMessage string `json:"user_message"`
+}
+
+func assertErrorContract(t *testing.T, w *httptest.ResponseRecorder, wantStatus int, wantCode string, wantDescription ...string) {
+	t.Helper()
+	if w.Code != wantStatus {
+		t.Fatalf("status = %d, want %d (body %q)", w.Code, wantStatus, w.Body.String())
+	}
+	if contentType := w.Header().Get("Content-Type"); !strings.Contains(contentType, "application/json") {
+		t.Fatalf("Content-Type = %q, want application/json", contentType)
+	}
+
+	var response apiErrorResponse
+	if err := json.Unmarshal(w.Body.Bytes(), &response); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if response.Error != http.StatusText(wantStatus) {
+		t.Fatalf("error = %q, want %q", response.Error, http.StatusText(wantStatus))
+	}
+	if response.Message == "" {
+		t.Fatal("expected non-empty message")
+	}
+	if response.Code != wantCode {
+		t.Fatalf("code = %q, want %q", response.Code, wantCode)
+	}
+	if response.Description == "" {
+		t.Fatal("expected non-empty description")
+	}
+	if response.UserMessage != response.Description {
+		t.Fatalf("user_message = %q, want same as description %q", response.UserMessage, response.Description)
+	}
+	if len(wantDescription) > 0 && response.Description != wantDescription[0] {
+		t.Fatalf("description = %q, want %q", response.Description, wantDescription[0])
+	}
+}
+
 func TestAuthHandler_Register(t *testing.T) {
 	tests := []struct {
 		name       string
 		body       string
 		seedEmail  string
 		wantStatus int
+		wantCode   string
+		wantDesc   string
 	}{
-		{"valid", `{"email":"new@example.com","username":"newbie","password":"supersecret"}`, "", http.StatusCreated},
-		{"duplicate email", `{"email":"dup@example.com","username":"other","password":"supersecret"}`, "dup@example.com", http.StatusConflict},
-		{"short password", `{"email":"x@example.com","username":"x","password":"short"}`, "", http.StatusBadRequest},
-		{"missing email", `{"username":"x","password":"supersecret"}`, "", http.StatusBadRequest},
-		{"invalid json", `not json`, "", http.StatusBadRequest},
+		{"valid", `{"email":"new@example.com","username":"newbie","password":"supersecret"}`, "", http.StatusCreated, "", ""},
+		{"duplicate email", `{"email":"dup@example.com","username":"other","password":"supersecret"}`, "dup@example.com", http.StatusConflict, "USER_ALREADY_EXISTS", "El email o nombre de usuario ya está en uso."},
+		{"short password", `{"email":"x@example.com","username":"x","password":"short"}`, "", http.StatusBadRequest, "AUTH_VALIDATION_FAILED", "Email, usuario y contraseña (mínimo 8 caracteres) son obligatorios."},
+		{"missing email", `{"username":"x","password":"supersecret"}`, "", http.StatusBadRequest, "AUTH_VALIDATION_FAILED", "Email, usuario y contraseña (mínimo 8 caracteres) son obligatorios."},
+		{"invalid json", `not json`, "", http.StatusBadRequest, "AUTH_INVALID_BODY", "No pudimos procesar la solicitud. Revisa los datos e inténtalo de nuevo."},
 	}
 
 	for _, tc := range tests {
@@ -127,10 +170,10 @@ func TestAuthHandler_Register(t *testing.T) {
 
 			handler.HandleRegister(w, req)
 
-			if w.Code != tc.wantStatus {
-				t.Fatalf("status = %d, want %d (body %q)", w.Code, tc.wantStatus, w.Body.String())
-			}
 			if tc.wantStatus == http.StatusCreated {
+				if w.Code != tc.wantStatus {
+					t.Fatalf("status = %d, want %d (body %q)", w.Code, tc.wantStatus, w.Body.String())
+				}
 				var resp AuthResponse
 				if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
 					t.Fatalf("unmarshal: %v", err)
@@ -162,7 +205,10 @@ func TestAuthHandler_Register(t *testing.T) {
 				if !foundAuthCookie {
 					t.Error("expected auth cookie in register response")
 				}
+				return
 			}
+
+			assertErrorContract(t, w, tc.wantStatus, tc.wantCode, tc.wantDesc)
 		})
 	}
 }
@@ -172,12 +218,14 @@ func TestAuthHandler_Login(t *testing.T) {
 		name       string
 		body       string
 		wantStatus int
+		wantCode   string
+		wantDesc   string
 	}{
-		{"valid", `{"email":"chef@example.com","password":"password123"}`, http.StatusOK},
-		{"wrong password", `{"email":"chef@example.com","password":"wrongpass"}`, http.StatusUnauthorized},
-		{"unknown email", `{"email":"ghost@example.com","password":"password123"}`, http.StatusUnauthorized},
-		{"missing fields", `{"email":"chef@example.com"}`, http.StatusBadRequest},
-		{"invalid json", `nope`, http.StatusBadRequest},
+		{"valid", `{"email":"chef@example.com","password":"password123"}`, http.StatusOK, "", ""},
+		{"wrong password", `{"email":"chef@example.com","password":"wrongpass"}`, http.StatusUnauthorized, "INVALID_CREDENTIALS", "Credenciales inválidas."},
+		{"unknown email", `{"email":"ghost@example.com","password":"password123"}`, http.StatusUnauthorized, "INVALID_CREDENTIALS", "Credenciales inválidas."},
+		{"missing fields", `{"email":"chef@example.com"}`, http.StatusBadRequest, "AUTH_VALIDATION_FAILED", "Email y contraseña son obligatorios."},
+		{"invalid json", `nope`, http.StatusBadRequest, "AUTH_INVALID_BODY", "No pudimos procesar la solicitud. Revisa los datos e inténtalo de nuevo."},
 	}
 
 	for _, tc := range tests {
@@ -191,10 +239,10 @@ func TestAuthHandler_Login(t *testing.T) {
 
 			handler.HandleLogin(w, req)
 
-			if w.Code != tc.wantStatus {
-				t.Fatalf("status = %d, want %d (body %q)", w.Code, tc.wantStatus, w.Body.String())
-			}
 			if tc.wantStatus == http.StatusOK {
+				if w.Code != tc.wantStatus {
+					t.Fatalf("status = %d, want %d (body %q)", w.Code, tc.wantStatus, w.Body.String())
+				}
 				var resp AuthResponse
 				if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
 					t.Fatalf("unmarshal: %v", err)
@@ -216,7 +264,10 @@ func TestAuthHandler_Login(t *testing.T) {
 				if !foundAuthCookie {
 					t.Error("expected auth cookie in login response")
 				}
+				return
 			}
+
+			assertErrorContract(t, w, tc.wantStatus, tc.wantCode, tc.wantDesc)
 		})
 	}
 }
@@ -234,9 +285,7 @@ func TestAuthHandler_Login_NoBackdoor(t *testing.T) {
 
 	handler.HandleLogin(w, req)
 
-	if w.Code != http.StatusUnauthorized {
-		t.Fatalf("status = %d, want 401 (backdoor must be gone)", w.Code)
-	}
+	assertErrorContract(t, w, http.StatusUnauthorized, "INVALID_CREDENTIALS", "Credenciales inválidas.")
 }
 
 func TestAuthHandler_Logout(t *testing.T) {
@@ -268,6 +317,27 @@ func TestAuthHandler_Logout(t *testing.T) {
 	}
 }
 
+func TestAuthHandler_Logout_JSONResponseForAPIClients(t *testing.T) {
+	handler := newAuthHandler(newFakeUserStore())
+	req := httptest.NewRequest(http.MethodPost, "/api/auth/logout", nil)
+	req.Header.Set("Accept", "application/json")
+	w := httptest.NewRecorder()
+
+	handler.HandleLogout(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", w.Code, http.StatusOK)
+	}
+
+	var response map[string]interface{}
+	if err := json.Unmarshal(w.Body.Bytes(), &response); err != nil {
+		t.Fatalf("expected JSON response, unmarshal failed: %v", err)
+	}
+	if response["message"] != "Logout successful" {
+		t.Fatalf("message = %v, want Logout successful", response["message"])
+	}
+}
+
 func TestAuthHandler_Register_UniqueConstraintConflict(t *testing.T) {
 	store := newFakeUserStore()
 	store.createErr = fmt.Errorf("failed to create user: constraint failed: UNIQUE constraint failed: users.email (2067)")
@@ -278,7 +348,5 @@ func TestAuthHandler_Register_UniqueConstraintConflict(t *testing.T) {
 
 	handler.HandleRegister(w, req)
 
-	if w.Code != http.StatusConflict {
-		t.Fatalf("status = %d, want %d", w.Code, http.StatusConflict)
-	}
+	assertErrorContract(t, w, http.StatusConflict, "USER_ALREADY_EXISTS")
 }

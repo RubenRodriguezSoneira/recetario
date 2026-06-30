@@ -120,7 +120,7 @@ func (h *AuthHandler) HandleRegister(w http.ResponseWriter, r *http.Request) {
 	var req RegisterRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		log.Info("Register failed: invalid request body", "error", err)
-		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		appmiddleware.WriteJSONError(w, http.StatusBadRequest, "AUTH_INVALID_BODY", "Invalid request payload", "No pudimos procesar la solicitud. Revisa los datos e inténtalo de nuevo.")
 		return
 	}
 
@@ -128,32 +128,32 @@ func (h *AuthHandler) HandleRegister(w http.ResponseWriter, r *http.Request) {
 	req.Username = strings.ToLower(strings.TrimSpace(req.Username))
 	if req.Email == "" || req.Username == "" || len(req.Password) < 8 {
 		log.Info("Register failed: missing required fields")
-		http.Error(w, "email, username and password (min 8 chars) are required", http.StatusBadRequest)
+		appmiddleware.WriteJSONError(w, http.StatusBadRequest, "AUTH_VALIDATION_FAILED", "Invalid registration data", "Email, usuario y contraseña (mínimo 8 caracteres) son obligatorios.")
 		return
 	}
 
 	emailTaken, err := h.users.EmailExists(req.Email)
 	if err != nil {
 		log.Error("Failed to check email existence", "error", err)
-		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		appmiddleware.WriteJSONError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "Internal server error", "Ocurrió un error interno. Inténtalo más tarde.")
 		return
 	}
 	usernameTaken, err := h.users.UsernameExists(req.Username)
 	if err != nil {
 		log.Error("Failed to check username existence", "error", err)
-		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		appmiddleware.WriteJSONError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "Internal server error", "Ocurrió un error interno. Inténtalo más tarde.")
 		return
 	}
 	if emailTaken || usernameTaken {
 		log.Info("Register conflict: email or username already exists", "email", req.Email, "username", req.Username)
-		http.Error(w, "email or username already in use", http.StatusConflict)
+		appmiddleware.WriteJSONError(w, http.StatusConflict, "USER_ALREADY_EXISTS", "Registration conflict", "El email o nombre de usuario ya está en uso.")
 		return
 	}
 
 	hash, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
 	if err != nil {
 		log.Error("Password hashing failed", "error", err)
-		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		appmiddleware.WriteJSONError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "Internal server error", "Ocurrió un error interno. Inténtalo más tarde.")
 		return
 	}
 
@@ -167,18 +167,18 @@ func (h *AuthHandler) HandleRegister(w http.ResponseWriter, r *http.Request) {
 	if err := h.users.CreateUser(user); err != nil {
 		if isUniqueUserConflict(err) {
 			log.Info("Register conflict: unique constraint", "email", req.Email, "username", req.Username, "error", err)
-			http.Error(w, "email or username already in use", http.StatusConflict)
+			appmiddleware.WriteJSONError(w, http.StatusConflict, "USER_ALREADY_EXISTS", "Registration conflict", "El email o nombre de usuario ya está en uso.")
 			return
 		}
 		log.Error("Failed to create user", "error", err)
-		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		appmiddleware.WriteJSONError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "Internal server error", "Ocurrió un error interno. Inténtalo más tarde.")
 		return
 	}
 
 	token, err := h.authService.GenerateToken(user.ID, user.Email, false)
 	if err != nil {
 		log.Error("Token generation failed", "error", err)
-		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		appmiddleware.WriteJSONError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "Internal server error", "Ocurrió un error interno. Inténtalo más tarde.")
 		return
 	}
 
@@ -200,14 +200,14 @@ func (h *AuthHandler) HandleLogin(w http.ResponseWriter, r *http.Request) {
 	var req LoginRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		log.Info("Login failed: invalid request body", "error", err)
-		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		appmiddleware.WriteJSONError(w, http.StatusBadRequest, "AUTH_INVALID_BODY", "Invalid request payload", "No pudimos procesar la solicitud. Revisa los datos e inténtalo de nuevo.")
 		return
 	}
 
 	req.Email = strings.ToLower(strings.TrimSpace(req.Email))
 	if req.Email == "" || req.Password == "" {
 		log.Info("Login failed: missing email or password")
-		http.Error(w, "email and password required", http.StatusBadRequest)
+		appmiddleware.WriteJSONError(w, http.StatusBadRequest, "AUTH_VALIDATION_FAILED", "Invalid login data", "Email y contraseña son obligatorios.")
 		return
 	}
 
@@ -215,20 +215,20 @@ func (h *AuthHandler) HandleLogin(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		// Do not reveal whether the email exists; log server-side only.
 		log.Info("Login failed: user lookup", "error", err)
-		http.Error(w, "invalid credentials", http.StatusUnauthorized)
+		appmiddleware.WriteJSONError(w, http.StatusUnauthorized, "INVALID_CREDENTIALS", "Authentication failed", "Credenciales inválidas.")
 		return
 	}
 
 	if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(req.Password)); err != nil {
 		log.Info("Login failed: invalid credentials")
-		http.Error(w, "invalid credentials", http.StatusUnauthorized)
+		appmiddleware.WriteJSONError(w, http.StatusUnauthorized, "INVALID_CREDENTIALS", "Authentication failed", "Credenciales inválidas.")
 		return
 	}
 
 	token, err := h.authService.GenerateToken(user.ID, user.Email, false)
 	if err != nil {
 		log.Error("Token generation failed", "error", err)
-		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		appmiddleware.WriteJSONError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "Internal server error", "Ocurrió un error interno. Inténtalo más tarde.")
 		return
 	}
 
@@ -246,6 +246,16 @@ func (h *AuthHandler) HandleLogin(w http.ResponseWriter, r *http.Request) {
 func (h *AuthHandler) HandleLogout(w http.ResponseWriter, r *http.Request) {
 	logger.FromContext(r.Context()).Info("User logout request")
 	http.SetCookie(w, clearAuthCookie(r))
+
+	if strings.Contains(strings.ToLower(r.Header.Get("Accept")), "application/json") {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_ = json.NewEncoder(w).Encode(map[string]string{
+			"message": "Logout successful",
+		})
+		return
+	}
+
 	http.Redirect(w, r, "/", http.StatusSeeOther)
 }
 
@@ -254,27 +264,27 @@ func (h *AuthHandler) HandleRefresh(w http.ResponseWriter, r *http.Request) {
 
 	authHeader := r.Header.Get("Authorization")
 	if authHeader == "" {
-		http.Error(w, "Authorization header required", http.StatusUnauthorized)
+		appmiddleware.WriteJSONError(w, http.StatusUnauthorized, "AUTH_HEADER_REQUIRED", "Authentication required", "Debes iniciar sesión para continuar.")
 		return
 	}
 
 	tokenParts := strings.Split(authHeader, " ")
 	if len(tokenParts) != 2 || tokenParts[0] != "Bearer" {
-		http.Error(w, "Invalid authorization format", http.StatusUnauthorized)
+		appmiddleware.WriteJSONError(w, http.StatusUnauthorized, "INVALID_AUTH_FORMAT", "Invalid authorization format", "Tu sesión no es válida. Inicia sesión nuevamente.")
 		return
 	}
 
 	claims, err := h.authService.ValidateToken(tokenParts[1])
 	if err != nil {
 		log.Info("Token validation failed", "error", err)
-		http.Error(w, "Invalid token", http.StatusUnauthorized)
+		appmiddleware.WriteJSONError(w, http.StatusUnauthorized, "INVALID_TOKEN", "Invalid token", "Tu sesión expiró o no es válida. Inicia sesión nuevamente.")
 		return
 	}
 
 	newToken, err := h.authService.GenerateToken(claims.UserID, claims.Email, claims.IsAdmin)
 	if err != nil {
 		log.Error("Token generation failed", "error", err)
-		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		appmiddleware.WriteJSONError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "Internal server error", "Ocurrió un error interno. Inténtalo más tarde.")
 		return
 	}
 

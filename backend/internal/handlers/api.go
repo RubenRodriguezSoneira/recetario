@@ -49,7 +49,7 @@ func (h *APIHandler) HandleRecipes(w http.ResponseWriter, r *http.Request) {
 	case http.MethodPost:
 		h.createRecipe(w, r)
 	default:
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		appmiddleware.WriteJSONError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "Method not allowed", "Método no permitido.")
 	}
 }
 
@@ -62,7 +62,7 @@ func (h *APIHandler) HandleRecipe(w http.ResponseWriter, r *http.Request) {
 	case http.MethodDelete:
 		h.deleteRecipe(w, r)
 	default:
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		appmiddleware.WriteJSONError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "Method not allowed", "Método no permitido.")
 	}
 }
 
@@ -103,7 +103,7 @@ func (h *APIHandler) getRecipes(w http.ResponseWriter, r *http.Request) {
 	recipes, err := h.recipeRepo.GetRecipes(limit, offset, search, difficulty, maxCookTime)
 	if err != nil {
 		logger.FromContext(r.Context()).Error("Failed to list recipes", "error", err)
-		http.Error(w, "Failed to list recipes", http.StatusInternalServerError)
+		appmiddleware.WriteJSONError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "Internal server error", "No se pudieron listar las recetas en este momento.")
 		return
 	}
 
@@ -129,7 +129,8 @@ func (h *APIHandler) getRecipes(w http.ResponseWriter, r *http.Request) {
 		if tmpl != nil {
 			data := map[string]interface{}{"recipes": recipeMaps}
 			if err := tmpl.Execute(w, data); err != nil {
-				http.Error(w, "Template execution error", http.StatusInternalServerError)
+				logger.FromContext(r.Context()).Error("Failed to render recipe cards template", "error", err)
+				appmiddleware.WriteJSONError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "Internal server error", "No se pudieron listar las recetas en este momento.")
 			}
 			return
 		}
@@ -145,12 +146,12 @@ func (h *APIHandler) createRecipe(w http.ResponseWriter, r *http.Request) {
 
 	var recipe models.Recipe
 	if err := json.NewDecoder(r.Body).Decode(&recipe); err != nil {
-		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		appmiddleware.WriteJSONError(w, http.StatusBadRequest, "INVALID_JSON", "Invalid request payload", "No pudimos procesar la receta. Revisa los datos e inténtalo de nuevo.")
 		return
 	}
 
 	if err := recipe.Validate(); err != nil {
-		http.Error(w, "Validation error: "+err.Error(), http.StatusBadRequest)
+		appmiddleware.WriteJSONError(w, http.StatusBadRequest, "RECIPE_VALIDATION_FAILED", "Invalid recipe data", "La receta no es válida. Revisa los campos obligatorios.")
 		return
 	}
 
@@ -161,7 +162,7 @@ func (h *APIHandler) createRecipe(w http.ResponseWriter, r *http.Request) {
 
 	if err := h.recipeRepo.CreateRecipe(&recipe); err != nil {
 		log.Error("Failed to create recipe", "error", err)
-		http.Error(w, "Failed to create recipe", http.StatusInternalServerError)
+		appmiddleware.WriteJSONError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "Internal server error", "No se pudo crear la receta en este momento.")
 		return
 	}
 
@@ -175,7 +176,7 @@ func (h *APIHandler) getRecipe(w http.ResponseWriter, r *http.Request) {
 
 	recipe, err := h.recipeRepo.GetRecipe(recipeID)
 	if err != nil {
-		http.Error(w, "Recipe not found", http.StatusNotFound)
+		appmiddleware.WriteJSONError(w, http.StatusNotFound, "RECIPE_NOT_FOUND", "Resource not found", "No encontramos la receta solicitada.")
 		return
 	}
 
@@ -206,7 +207,8 @@ func (h *APIHandler) getRecipe(w http.ResponseWriter, r *http.Request) {
 		if tmpl != nil {
 			data := map[string]interface{}{"recipe": recipeMap}
 			if err := tmpl.Execute(w, data); err != nil {
-				http.Error(w, "Template execution error", http.StatusInternalServerError)
+				logger.FromContext(r.Context()).Error("Failed to render recipe detail template", "error", err)
+				appmiddleware.WriteJSONError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "Internal server error", "No pudimos cargar la receta en este momento.")
 			}
 			return
 		}
@@ -222,28 +224,28 @@ func (h *APIHandler) updateRecipe(w http.ResponseWriter, r *http.Request) {
 
 	existing, err := h.recipeRepo.GetRecipe(recipeID)
 	if err != nil {
-		http.Error(w, "Recipe not found", http.StatusNotFound)
+		appmiddleware.WriteJSONError(w, http.StatusNotFound, "RECIPE_NOT_FOUND", "Resource not found", "No encontramos la receta solicitada.")
 		return
 	}
 
 	userID, ok := appmiddleware.GetUserID(r.Context())
 	if !ok {
-		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		appmiddleware.WriteJSONError(w, http.StatusUnauthorized, "UNAUTHORIZED", "Authentication required", "Debes iniciar sesión para editar esta receta.")
 		return
 	}
 	if existing.UserID != userID {
-		http.Error(w, "Forbidden", http.StatusForbidden)
+		appmiddleware.WriteJSONError(w, http.StatusForbidden, "FORBIDDEN", "Access forbidden", "No tienes permisos para editar esta receta.")
 		return
 	}
 
 	var recipe models.Recipe
 	if err := json.NewDecoder(r.Body).Decode(&recipe); err != nil {
-		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		appmiddleware.WriteJSONError(w, http.StatusBadRequest, "INVALID_JSON", "Invalid request payload", "No pudimos procesar la receta. Revisa los datos e inténtalo de nuevo.")
 		return
 	}
 
 	if err := recipe.Validate(); err != nil {
-		http.Error(w, "Validation error: "+err.Error(), http.StatusBadRequest)
+		appmiddleware.WriteJSONError(w, http.StatusBadRequest, "RECIPE_VALIDATION_FAILED", "Invalid recipe data", "La receta no es válida. Revisa los campos obligatorios.")
 		return
 	}
 
@@ -253,7 +255,7 @@ func (h *APIHandler) updateRecipe(w http.ResponseWriter, r *http.Request) {
 
 	if err := h.recipeRepo.UpdateRecipe(&recipe); err != nil {
 		log.Error("Failed to update recipe", "error", err)
-		http.Error(w, "Failed to update recipe", http.StatusInternalServerError)
+		appmiddleware.WriteJSONError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "Internal server error", "No se pudo actualizar la receta en este momento.")
 		return
 	}
 
@@ -267,23 +269,23 @@ func (h *APIHandler) deleteRecipe(w http.ResponseWriter, r *http.Request) {
 
 	existing, err := h.recipeRepo.GetRecipe(recipeID)
 	if err != nil {
-		http.Error(w, "Recipe not found", http.StatusNotFound)
+		appmiddleware.WriteJSONError(w, http.StatusNotFound, "RECIPE_NOT_FOUND", "Resource not found", "No encontramos la receta solicitada.")
 		return
 	}
 
 	userID, ok := appmiddleware.GetUserID(r.Context())
 	if !ok {
-		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		appmiddleware.WriteJSONError(w, http.StatusUnauthorized, "UNAUTHORIZED", "Authentication required", "Debes iniciar sesión para eliminar esta receta.")
 		return
 	}
 	if existing.UserID != userID {
-		http.Error(w, "Forbidden", http.StatusForbidden)
+		appmiddleware.WriteJSONError(w, http.StatusForbidden, "FORBIDDEN", "Access forbidden", "No tienes permisos para eliminar esta receta.")
 		return
 	}
 
 	if err := h.recipeRepo.DeleteRecipe(recipeID); err != nil {
 		log.Error("Failed to delete recipe", "error", err)
-		http.Error(w, "Failed to delete recipe", http.StatusInternalServerError)
+		appmiddleware.WriteJSONError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "Internal server error", "No se pudo eliminar la receta en este momento.")
 		return
 	}
 
