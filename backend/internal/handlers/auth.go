@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"strings"
 	"time"
@@ -15,6 +16,15 @@ import (
 
 // tokenExpiresInSeconds mirrors the AuthService token expiry (24h) reported to clients.
 const tokenExpiresInSeconds = 86400
+
+func isUniqueUserConflict(err error) bool {
+	if err == nil {
+		return false
+	}
+	errMsg := strings.ToLower(err.Error())
+	return strings.Contains(errMsg, "unique constraint failed: users.email") ||
+		strings.Contains(errMsg, "unique constraint failed: users.username")
+}
 
 func buildAuthCookie(r *http.Request, token string, maxAge int) *http.Cookie {
 	secure := false
@@ -109,13 +119,15 @@ func (h *AuthHandler) HandleRegister(w http.ResponseWriter, r *http.Request) {
 
 	var req RegisterRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		log.Info("Register failed: invalid request body", "error", err)
 		http.Error(w, "Invalid request body", http.StatusBadRequest)
 		return
 	}
 
-	req.Email = strings.TrimSpace(req.Email)
-	req.Username = strings.TrimSpace(req.Username)
+	req.Email = strings.ToLower(strings.TrimSpace(req.Email))
+	req.Username = strings.ToLower(strings.TrimSpace(req.Username))
 	if req.Email == "" || req.Username == "" || len(req.Password) < 8 {
+		log.Info("Register failed: missing required fields")
 		http.Error(w, "email, username and password (min 8 chars) are required", http.StatusBadRequest)
 		return
 	}
@@ -133,6 +145,7 @@ func (h *AuthHandler) HandleRegister(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if emailTaken || usernameTaken {
+		log.Info("Register conflict: email or username already exists", "email", req.Email, "username", req.Username)
 		http.Error(w, "email or username already in use", http.StatusConflict)
 		return
 	}
@@ -152,6 +165,11 @@ func (h *AuthHandler) HandleRegister(w http.ResponseWriter, r *http.Request) {
 		Password:  string(hash),
 	}
 	if err := h.users.CreateUser(user); err != nil {
+		if isUniqueUserConflict(err) {
+			log.Info("Register conflict: unique constraint", "email", req.Email, "username", req.Username, "error", err)
+			http.Error(w, "email or username already in use", http.StatusConflict)
+			return
+		}
 		log.Error("Failed to create user", "error", err)
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
 		return
@@ -167,11 +185,13 @@ func (h *AuthHandler) HandleRegister(w http.ResponseWriter, r *http.Request) {
 	http.SetCookie(w, buildAuthCookie(r, token, tokenExpiresInSeconds))
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(AuthResponse{
+	if err := json.NewEncoder(w).Encode(AuthResponse{
 		Token:     token,
 		User:      toPublicUser(user),
 		ExpiresIn: tokenExpiresInSeconds,
-	})
+	}); err != nil {
+		log.Error("Failed to encode register response", "error", fmt.Errorf("failed to encode register response: %w", err))
+	}
 }
 
 func (h *AuthHandler) HandleLogin(w http.ResponseWriter, r *http.Request) {
@@ -179,11 +199,14 @@ func (h *AuthHandler) HandleLogin(w http.ResponseWriter, r *http.Request) {
 
 	var req LoginRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		log.Info("Login failed: invalid request body", "error", err)
 		http.Error(w, "Invalid request body", http.StatusBadRequest)
 		return
 	}
 
+	req.Email = strings.ToLower(strings.TrimSpace(req.Email))
 	if req.Email == "" || req.Password == "" {
+		log.Info("Login failed: missing email or password")
 		http.Error(w, "email and password required", http.StatusBadRequest)
 		return
 	}
@@ -197,6 +220,7 @@ func (h *AuthHandler) HandleLogin(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(req.Password)); err != nil {
+		log.Info("Login failed: invalid credentials")
 		http.Error(w, "invalid credentials", http.StatusUnauthorized)
 		return
 	}
@@ -210,14 +234,17 @@ func (h *AuthHandler) HandleLogin(w http.ResponseWriter, r *http.Request) {
 
 	http.SetCookie(w, buildAuthCookie(r, token, tokenExpiresInSeconds))
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(AuthResponse{
+	if err := json.NewEncoder(w).Encode(AuthResponse{
 		Token:     token,
 		User:      toPublicUser(user),
 		ExpiresIn: tokenExpiresInSeconds,
-	})
+	}); err != nil {
+		log.Error("Failed to encode login response", "error", fmt.Errorf("failed to encode login response: %w", err))
+	}
 }
 
 func (h *AuthHandler) HandleLogout(w http.ResponseWriter, r *http.Request) {
+	logger.FromContext(r.Context()).Info("User logout request")
 	http.SetCookie(w, clearAuthCookie(r))
 	http.Redirect(w, r, "/", http.StatusSeeOther)
 }

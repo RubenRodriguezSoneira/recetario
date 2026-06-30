@@ -267,3 +267,18 @@ func TestAuthHandler_Logout(t *testing.T) {
 		t.Fatal("expected auth cookie to be cleared on logout")
 	}
 }
+
+func TestAuthHandler_Register_UniqueConstraintConflict(t *testing.T) {
+	store := newFakeUserStore()
+	store.createErr = fmt.Errorf("failed to create user: constraint failed: UNIQUE constraint failed: users.email (2067)")
+	handler := newAuthHandler(store)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/auth/register", strings.NewReader(`{"email":"dup@example.com","username":"dup","password":"password123"}`))
+	w := httptest.NewRecorder()
+
+	handler.HandleRegister(w, req)
+
+	if w.Code != http.StatusConflict {
+		t.Fatalf("status = %d, want %d", w.Code, http.StatusConflict)
+	}
+}
