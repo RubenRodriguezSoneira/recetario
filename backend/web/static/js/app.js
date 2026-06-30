@@ -97,19 +97,6 @@ function toggleMobileMenu() {
     }
 }
 
-// Close modals when clicking outside
-document.addEventListener('click', function(event) {
-    const loginModal = document.getElementById('loginModal');
-    const registerModal = document.getElementById('registerModal');
-    
-    if (event.target === loginModal) {
-        hideLoginModal();
-    }
-    if (event.target === registerModal) {
-        hideRegisterModal();
-    }
-});
-
 // HTMX event handlers
 document.addEventListener('htmx:afterRequest', function(event) {
     const target = event.target;

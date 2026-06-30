@@ -143,6 +143,10 @@ func main() {
 		r.Get("/{id}", webHandler.HandleRecipeDetail)
 	})
 
+	r.Get("/favicon.ico", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	})
+
 	// Serve uploaded images
 	r.Get("/uploads/{filename}", fileHandler.ServeFile)
 
